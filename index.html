@@ -7,6 +7,10 @@
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="theme-color" content="#E24B4A">
 <title>LiftLog</title>
+<!-- Telegram Mini App SDK — required for running inside Telegram -->
+<script src="https://telegram.org/js/telegram-web-app.js"></script>
+<!-- Supabase JS SDK -->
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@400;600;700;900&family=Barlow:wght@400;500;600&display=swap" rel="stylesheet">
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
@@ -366,17 +370,112 @@ select.inp{cursor:pointer}
     </div>
   </div>
 
+  <!-- ── AUTH SCREEN ─────────────────────────────────────────── -->
+  <div id="auth-screen" style="display:none;position:fixed;inset:0;background:var(--bg);z-index:9999;overflow-y:auto">
+    <div style="max-width:380px;margin:0 auto;padding:40px 24px">
+      <!-- Logo -->
+      <div style="text-align:center;margin-bottom:32px">
+        <div style="font-family:var(--font-cond);font-weight:900;font-size:48px;letter-spacing:-1px">
+          LIFT<span style="color:var(--red)">LOG</span>
+        </div>
+        <div style="font-size:14px;color:var(--text3);margin-top:4px">Your gym, food & life tracker</div>
+      </div>
+
+      <!-- Tab toggle -->
+      <div style="display:grid;grid-template-columns:1fr 1fr;background:var(--surface2);border-radius:12px;padding:3px;margin-bottom:24px">
+        <button id="auth-tab-login" onclick="setAuthTab('login')"
+          style="padding:10px;border:none;border-radius:10px;font-family:var(--font-cond);font-weight:700;font-size:15px;cursor:pointer;background:var(--red);color:#fff;transition:all .2s">
+          Sign In
+        </button>
+        <button id="auth-tab-signup" onclick="setAuthTab('signup')"
+          style="padding:10px;border:none;border-radius:10px;font-family:var(--font-cond);font-weight:700;font-size:15px;cursor:pointer;background:transparent;color:var(--text2);transition:all .2s">
+          Sign Up
+        </button>
+      </div>
+
+      <!-- Login form -->
+      <div id="auth-form-login">
+        <div style="margin-bottom:12px">
+          <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.8px;color:var(--text3);margin-bottom:5px">Email</div>
+          <input class="inp" id="auth-email" type="email" placeholder="you@example.com" inputmode="email"
+            style="width:100%;font-size:15px" autocomplete="email">
+        </div>
+        <div style="margin-bottom:20px">
+          <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.8px;color:var(--text3);margin-bottom:5px">Password</div>
+          <input class="inp" id="auth-password" type="password" placeholder="••••••••"
+            style="width:100%;font-size:15px" autocomplete="current-password">
+        </div>
+        <button class="btn-primary" onclick="authLogin()" id="auth-login-btn" style="width:100%;font-size:16px;padding:14px">
+          Sign In →
+        </button>
+        <button onclick="authMagicLink()" style="width:100%;margin-top:10px;background:none;border:none;color:var(--text3);font-size:13px;cursor:pointer;padding:8px">
+          Send magic link instead
+        </button>
+      </div>
+
+      <!-- Signup form -->
+      <div id="auth-form-signup" style="display:none">
+        <div style="margin-bottom:12px">
+          <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.8px;color:var(--text3);margin-bottom:5px">Name</div>
+          <input class="inp" id="auth-name" type="text" placeholder="Sai"
+            style="width:100%;font-size:15px" autocomplete="name">
+        </div>
+        <div style="margin-bottom:12px">
+          <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.8px;color:var(--text3);margin-bottom:5px">Email</div>
+          <input class="inp" id="auth-email-signup" type="email" placeholder="you@example.com" inputmode="email"
+            style="width:100%;font-size:15px" autocomplete="email">
+        </div>
+        <div style="margin-bottom:20px">
+          <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.8px;color:var(--text3);margin-bottom:5px">Password (min 6 chars)</div>
+          <input class="inp" id="auth-password-signup" type="password" placeholder="••••••••"
+            style="width:100%;font-size:15px" autocomplete="new-password">
+        </div>
+        <button class="btn-primary" onclick="authSignup()" id="auth-signup-btn" style="width:100%;font-size:16px;padding:14px">
+          Create Account →
+        </button>
+      </div>
+
+      <!-- Error / status message -->
+      <div id="auth-msg" style="margin-top:14px;font-size:13px;text-align:center;color:var(--red);min-height:20px"></div>
+
+      <!-- Offline mode option -->
+      <div style="margin-top:32px;padding-top:24px;border-top:1px solid var(--border);text-align:center">
+        <div style="font-size:12px;color:var(--text3);margin-bottom:8px">Just want to try it out?</div>
+        <button onclick="useOfflineMode()"
+          style="background:none;border:1px solid var(--border);border-radius:10px;padding:10px 20px;color:var(--text2);font-size:13px;font-weight:600;cursor:pointer;width:100%">
+          Continue without account (offline only)
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── SYNC STATUS BAR ───────────────────────────────────────── -->
+  <div id="sync-bar" style="display:none;position:fixed;top:0;left:0;right:0;z-index:200;height:3px;background:var(--red);transition:opacity .5s"></div>
+
   <!-- HEADER -->
   <div class="header">
     <div class="logo">LIFT<span style="color:var(--red)">LOG</span></div>
-    <div style="display:flex;align-items:center;gap:10px">
+    <div style="display:flex;align-items:center;gap:8px">
+      <!-- Sync status dot -->
+      <div id="sync-dot" title="Sync status" style="width:8px;height:8px;border-radius:50%;background:#22c55e;flex-shrink:0;display:none"></div>
       <div class="current-page-label" id="current-page-label">Workout</div>
+      <!-- User avatar button -->
+      <button id="user-avatar-btn" onclick="toggleUserMenu()" style="display:none;width:30px;height:30px;border-radius:50%;background:var(--red);border:none;cursor:pointer;font-family:var(--font-cond);font-weight:900;font-size:13px;color:#fff;flex-shrink:0" title="Account">?</button>
       <button class="burger-btn" id="burger-btn" onclick="toggleDrawer()">
         <div class="burger-line"></div>
         <div class="burger-line"></div>
         <div class="burger-line"></div>
       </button>
     </div>
+  </div>
+
+  <!-- User menu dropdown -->
+  <div id="user-menu" style="display:none;position:fixed;top:52px;right:12px;z-index:500;background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:8px;min-width:200px;box-shadow:0 8px 24px rgba(0,0,0,.2)">
+    <div id="user-menu-name" style="font-weight:700;font-size:14px;color:var(--text);padding:8px 10px 4px"></div>
+    <div id="user-menu-email" style="font-size:11px;color:var(--text3);padding:0 10px 8px;border-bottom:1px solid var(--border);margin-bottom:4px"></div>
+    <button onclick="syncNow()" style="width:100%;text-align:left;background:none;border:none;padding:8px 10px;font-size:13px;color:var(--text2);cursor:pointer;border-radius:8px">🔄 Sync now</button>
+    <div id="user-menu-sync-time" style="font-size:10px;color:var(--text3);padding:0 10px 6px"></div>
+    <button onclick="authLogout()" style="width:100%;text-align:left;background:none;border:none;padding:8px 10px;font-size:13px;color:var(--red);cursor:pointer;border-radius:8px">→ Sign out</button>
   </div>
 
   <!-- NAV (hidden, kept for JS compat) -->
@@ -1786,6 +1885,7 @@ function addExercise(){
 }
 
 function saveWorkout(){
+  window._haptic?.('medium');
   const today=todayStr(),td=state.exercises.reduce((a,e)=>a+e.sets.filter(s=>s.done).length,0);
   if(td===0)return toast('Complete at least one set first!');
   const doneExercises=state.exercises.map(ex=>({name:ex.name,muscle:ex.muscle,met:ex.met,sets:ex.sets.filter(s=>s.done).map(s=>({w:s.w,r:s.r}))})).filter(ex=>ex.sets.length>0);
@@ -3089,6 +3189,7 @@ function skipRest(){clearInterval(restInterval);document.getElementById('rest-ov
 
 // Override toggleSet to auto-start rest timer
 function toggleSet(i,j){
+  window._haptic?.(state.exercises[i].sets[j].done?'light':'medium');
   const wasUndone=!state.exercises[i].sets[j].done;
   state.exercises[i].sets[j].done=!state.exercises[i].sets[j].done;
   renderExercises();
@@ -5104,6 +5205,72 @@ function addCustomFood(){
   toast('"'+name+'" saved! '+kcal+' kcal · P:'+protein+'g C:'+carbs+'g Fat:'+fat+'g Fibre:'+fibre+'g');
 }
 
+// ─── TELEGRAM MINI APP INTEGRATION ───────────────────────────────────────────
+const tg=window.Telegram?.WebApp;
+
+function initTelegram(){
+  if(!tg) return; // Running as regular web app — all features still work
+
+  // Tell Telegram the app is ready
+  tg.ready();
+
+  // Expand to full available height
+  tg.expand();
+
+  // Sync Telegram theme colors with our CSS variables
+  function applyTgTheme(){
+    const tp=tg.themeParams||{};
+    const root=document.documentElement;
+    if(tp.bg_color) root.style.setProperty('--bg',tp.bg_color);
+    if(tp.secondary_bg_color) root.style.setProperty('--surface',tp.secondary_bg_color);
+    if(tp.text_color) root.style.setProperty('--text',tp.text_color);
+    if(tp.hint_color) root.style.setProperty('--text3',tp.hint_color);
+    if(tp.button_color) root.style.setProperty('--red',tp.button_color);
+    if(tp.button_text_color) root.style.setProperty('--text-on-red',tp.button_text_color);
+  }
+  applyTgTheme();
+  tg.onEvent('themeChanged',applyTgTheme);
+
+  // Greet user by Telegram name on first open
+  const user=tg.initDataUnsafe?.user;
+  if(user?.first_name && !localStorage.getItem('tg_greeted')){
+    localStorage.setItem('tg_greeted','1');
+    setTimeout(()=>toast('Welcome, '+user.first_name+'! 💪'),800);
+  }
+
+  // Back button — show when not on workout page, close/go back when tapped
+  tg.BackButton.onClick(()=>{
+    const active=document.querySelector('.page.active');
+    if(active&&active.id!=='page-workout'){
+      showPage('workout');
+      tg.BackButton.hide();
+    } else {
+      tg.close();
+    }
+  });
+
+  // Show/hide back button based on page
+  const origShowPage=showPage;
+  window.showPage=function(name){
+    origShowPage(name);
+    if(name==='workout') tg.BackButton.hide();
+    else tg.BackButton.show();
+  };
+
+  // Haptic feedback on key interactions
+  window._haptic=function(type='light'){
+    tg.HapticFeedback?.impactOccurred(type);
+  };
+
+  // Prevent Telegram swipe-to-close on scroll
+  tg.disableVerticalSwipes?.();
+
+  // Safe area padding for notch/home indicator
+  const safeBottom=(tg.safeAreaInset?.bottom||0)+'px';
+  document.documentElement.style.setProperty('--safe-bottom', safeBottom);
+  document.querySelector('.bottom-nav-spacer')?.style.setProperty('padding-bottom',safeBottom);
+}
+
 // ─── INIT
 // TOAST
 let toastTimer;
@@ -5157,7 +5324,362 @@ function renderAll(){
   // Init food date to today so it's ready when user switches to food mode
   foodDate=todayStr();
 }
-loadState();renderAll();
+// ─── SUPABASE INTEGRATION ────────────────────────────────────────────────────
+// ⚙️  CONFIGURE: Replace with your Supabase project values
+// Get these from: Supabase Dashboard → Settings → API
+const SUPABASE_URL = 'https://your-project.supabase.co';
+const SUPABASE_ANON_KEY = 'sb_publishable_zl6E61v3Ojz2FhWWeMEIAA_ta1WSm3C';
+
+const _sb = (SUPABASE_URL !== 'YOUR_SUPABASE_URL')
+  ? supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY)
+  : null;
+
+let _sbUser = null;           // current logged-in user
+let _offlineMode = false;     // true = skip all Supabase calls
+let _lastSyncTime = null;
+let _syncPending = false;
+let _syncDebounceTimer = null;
+
+// ── Auth functions ────────────────────────────────────────────────────────────
+function setAuthTab(tab){
+  document.getElementById('auth-form-login').style.display = tab==='login'?'block':'none';
+  document.getElementById('auth-form-signup').style.display = tab==='signup'?'block':'none';
+  document.getElementById('auth-tab-login').style.background = tab==='login'?'var(--red)':'transparent';
+  document.getElementById('auth-tab-login').style.color = tab==='login'?'#fff':'var(--text2)';
+  document.getElementById('auth-tab-signup').style.background = tab==='signup'?'var(--red)':'transparent';
+  document.getElementById('auth-tab-signup').style.color = tab==='signup'?'#fff':'var(--text2)';
+  document.getElementById('auth-msg').textContent = '';
+}
+
+function showAuthError(msg){
+  const el = document.getElementById('auth-msg');
+  el.textContent = msg;
+  el.style.color = 'var(--red)';
+}
+function showAuthInfo(msg){
+  const el = document.getElementById('auth-msg');
+  el.textContent = msg;
+  el.style.color = '#22c55e';
+}
+
+async function authLogin(){
+  if(!_sb){showAuthError('Supabase not configured yet. See README.');return;}
+  const email = document.getElementById('auth-email').value.trim();
+  const pass  = document.getElementById('auth-password').value;
+  if(!email||!pass){showAuthError('Enter email and password');return;}
+  const btn = document.getElementById('auth-login-btn');
+  btn.textContent = 'Signing in…'; btn.disabled = true;
+  const {error} = await _sb.auth.signInWithPassword({email, password:pass});
+  btn.textContent = 'Sign In →'; btn.disabled = false;
+  if(error) showAuthError(error.message);
+}
+
+async function authSignup(){
+  if(!_sb){showAuthError('Supabase not configured yet. See README.');return;}
+  const name  = document.getElementById('auth-name').value.trim();
+  const email = document.getElementById('auth-email-signup').value.trim();
+  const pass  = document.getElementById('auth-password-signup').value;
+  if(!name||!email||!pass){showAuthError('Fill in all fields');return;}
+  if(pass.length<6){showAuthError('Password must be at least 6 characters');return;}
+  const btn = document.getElementById('auth-signup-btn');
+  btn.textContent = 'Creating…'; btn.disabled = true;
+  const {error} = await _sb.auth.signUp({
+    email, password:pass,
+    options:{data:{full_name:name}}
+  });
+  btn.textContent = 'Create Account →'; btn.disabled = false;
+  if(error) showAuthError(error.message);
+  else showAuthInfo('✓ Account created! Check your email to confirm, then sign in.');
+}
+
+async function authMagicLink(){
+  if(!_sb){showAuthError('Supabase not configured yet.');return;}
+  const email = document.getElementById('auth-email').value.trim();
+  if(!email){showAuthError('Enter your email first');return;}
+  showAuthInfo('Sending link…');
+  const {error} = await _sb.auth.signInWithOtp({email});
+  if(error) showAuthError(error.message);
+  else showAuthInfo('✓ Magic link sent! Check your email.');
+}
+
+async function authLogout(){
+  toggleUserMenu();
+  if(_sb) await _sb.auth.signOut();
+  _sbUser = null; _offlineMode = false;
+  // Clear sensitive state but keep localStorage for offline
+  document.getElementById('user-avatar-btn').style.display = 'none';
+  document.getElementById('sync-dot').style.display = 'none';
+  document.getElementById('auth-screen').style.display = 'block';
+  toast('Signed out');
+}
+
+function useOfflineMode(){
+  _offlineMode = true;
+  document.getElementById('auth-screen').style.display = 'none';
+  loadState(); renderAll(); initTelegram();
+  toast('Running offline — data saved on this device only');
+}
+
+function toggleUserMenu(){
+  const m = document.getElementById('user-menu');
+  m.style.display = m.style.display === 'none' ? 'block' : 'none';
+  if(m.style.display === 'block'){
+    const t = _lastSyncTime ? 'Last sync: '+_lastSyncTime.toLocaleTimeString() : 'Not synced yet';
+    document.getElementById('user-menu-sync-time').textContent = t;
+    document.addEventListener('click', closeUserMenuOutside, {once:true, capture:true});
+  }
+}
+function closeUserMenuOutside(e){
+  if(!document.getElementById('user-menu').contains(e.target)){
+    document.getElementById('user-menu').style.display = 'none';
+  }
+}
+
+// ── Sync: push local state → Supabase ────────────────────────────────────────
+async function syncToSupabase(){
+  if(!_sb || !_sbUser || _offlineMode) return;
+  setSyncDot('syncing');
+  try{
+    const uid = _sbUser.id;
+    const p = [];
+
+    // Profile + cal profile + streak
+    p.push(_sb.from('profiles').upsert({
+      id: uid,
+      cal_profile: state.calProfile,
+      step_goal: state.stepGoal||8000,
+      streak: state.streak,
+      last_saved: new Date().toISOString()
+    }));
+
+    // Active session (today's exercises)
+    p.push(_sb.from('active_session').upsert({
+      user_id: uid,
+      exercises: state.exercises,
+      exercise_date: state.exerciseDate||todayStr()
+    }));
+
+    // Exercise memory
+    p.push(_sb.from('exercise_memory').upsert({
+      user_id: uid,
+      memory: state.exerciseMemory||{}
+    }));
+
+    // Workout history — upsert all (batch by 50 to stay within limits)
+    const hist = state.workoutHistory||[];
+    for(let i=0;i<hist.length;i+=50){
+      const batch = hist.slice(i,i+50).map(w=>({
+        id: w.id, user_id: uid, date: w.date,
+        exercises: w.exercises,
+        total_volume: w.totalVolume||0,
+        total_kcal: w.totalKcal||0,
+        duration: w.duration||0
+      }));
+      p.push(_sb.from('workouts').upsert(batch));
+    }
+
+    // Weight log — upsert all
+    const wl = (state.weightLog||[]).map(e=>({
+      user_id: uid, date: e.date, weight_kg: e.kg, note: e.note||''
+    }));
+    if(wl.length) p.push(_sb.from('weight_log').upsert(wl,{onConflict:'user_id,date'}));
+
+    // Food log — upsert each date
+    const fl = state.foodLog||{};
+    const foodRows = Object.entries(fl).map(([date,log])=>({
+      user_id: uid, date,
+      meals: log.meals||{},
+      water_ml: log.water||0
+    }));
+    if(foodRows.length) p.push(_sb.from('food_log').upsert(foodRows,{onConflict:'user_id,date'}));
+
+    // Step log
+    const sl = state.stepLog||{};
+    const stepRows = Object.entries(sl).filter(([,v])=>v>0).map(([date,steps])=>({
+      user_id: uid, date, steps
+    }));
+    if(stepRows.length) p.push(_sb.from('step_log').upsert(stepRows,{onConflict:'user_id,date'}));
+
+    // Custom foods
+    const cf = (state.customFoods||[]).map(f=>({
+      user_id: uid, food_data: f
+    }));
+    if(cf.length) p.push(_sb.from('custom_foods').upsert(cf,{onConflict:'user_id,(food_data->>\'name\')'}));
+
+    await Promise.all(p);
+    _lastSyncTime = new Date();
+    setSyncDot('ok');
+    document.getElementById('save-status').textContent = '☁ Synced';
+  } catch(e){
+    console.warn('Sync error:',e);
+    setSyncDot('error');
+    document.getElementById('save-status').textContent = '✓ Local';
+  }
+}
+
+// ── Sync: pull Supabase → local state ────────────────────────────────────────
+async function syncFromSupabase(){
+  if(!_sb || !_sbUser) return;
+  setSyncDot('syncing');
+  try{
+    const uid = _sbUser.id;
+
+    // Profile
+    const {data:prof} = await _sb.from('profiles').select('*').eq('id',uid).single();
+    if(prof){
+      if(prof.cal_profile) state.calProfile = prof.cal_profile;
+      if(prof.step_goal)   state.stepGoal   = prof.step_goal;
+      if(prof.streak)      state.streak     = prof.streak;
+    }
+
+    // Workouts
+    const {data:wkts} = await _sb.from('workouts').select('*').eq('user_id',uid).order('date',{ascending:true});
+    if(wkts&&wkts.length){
+      state.workoutHistory = wkts.map(w=>({
+        id:w.id, date:w.date, exercises:w.exercises,
+        totalVolume:w.total_volume, totalKcal:w.total_kcal, duration:w.duration
+      }));
+    }
+
+    // Active session
+    const {data:sess} = await _sb.from('active_session').select('*').eq('user_id',uid).single();
+    if(sess&&sess.exercises&&sess.exercises.length){
+      const savedDate = sess.exercise_date;
+      const today = todayStr();
+      if(savedDate===today){
+        state.exercises = sess.exercises;
+        state.exerciseDate = today;
+      } else {
+        state.exercises = sess.exercises.map(ex=>({...ex,sets:ex.sets.map(s=>({...s,done:false}))}));
+        state.exerciseDate = today;
+      }
+    }
+
+    // Weight log
+    const {data:wl} = await _sb.from('weight_log').select('*').eq('user_id',uid).order('date');
+    if(wl) state.weightLog = wl.map(e=>({date:e.date,kg:parseFloat(e.weight_kg),note:e.note||''}));
+
+    // Food log
+    const {data:fl} = await _sb.from('food_log').select('*').eq('user_id',uid);
+    if(fl){
+      state.foodLog = {};
+      fl.forEach(r=>{ state.foodLog[r.date] = {meals:r.meals, water:r.water_ml}; });
+    }
+
+    // Step log
+    const {data:sl} = await _sb.from('step_log').select('*').eq('user_id',uid);
+    if(sl){
+      state.stepLog = {};
+      sl.forEach(r=>{ state.stepLog[r.date] = r.steps; });
+    }
+
+    // Exercise memory
+    const {data:em} = await _sb.from('exercise_memory').select('*').eq('user_id',uid).single();
+    if(em&&em.memory) {
+      state.exerciseMemory = em.memory;
+    }
+
+    // Custom foods
+    const {data:cfd} = await _sb.from('custom_foods').select('*').eq('user_id',uid);
+    if(cfd&&cfd.length){
+      state.customFoods = cfd.map(r=>r.food_data);
+      state.customFoods.forEach(f=>{
+        if(!FOOD_DB.find(x=>x.name===f.name)) FOOD_DB.push(f);
+      });
+    }
+
+    // Save to localStorage as offline cache
+    saveState();
+    _lastSyncTime = new Date();
+    setSyncDot('ok');
+  } catch(e){
+    console.warn('Fetch error:',e);
+    setSyncDot('error');
+    // Fall back to localStorage
+    loadState();
+  }
+}
+
+// ── Patch saveState to also trigger Supabase sync ────────────────────────────
+// We wrap the original by monkey-patching after definition
+(function(){
+  const _orig = saveState;
+  saveState = function(){
+    _orig();
+    if(_sbUser && !_offlineMode){
+      clearTimeout(_syncDebounceTimer);
+      setSyncDot('pending');
+      _syncDebounceTimer = setTimeout(syncToSupabase, 2000);
+    }
+  };
+})();
+
+// ── Sync indicator dot ────────────────────────────────────────────────────────
+function setSyncDot(status){
+  const dot = document.getElementById('sync-dot');
+  if(!dot) return;
+  dot.style.display = 'block';
+  const colors = {ok:'#22c55e', syncing:'#f97316', error:'var(--red)', pending:'#eab308'};
+  dot.style.background = colors[status]||'#22c55e';
+  dot.title = {ok:'Synced',syncing:'Syncing…',error:'Sync error — saved locally',pending:'Changes pending'}[status]||'';
+}
+
+async function syncNow(){
+  document.getElementById('user-menu').style.display = 'none';
+  toast('Syncing…');
+  await syncToSupabase();
+  toast('Synced ✓');
+}
+
+// ── Init: check auth state and boot app ───────────────────────────────────────
+async function initSupabase(){
+  if(!_sb){
+    // Not configured — just run locally
+    loadState(); renderAll(); initTelegram();
+    return;
+  }
+
+  // Listen for auth state changes
+  _sb.auth.onAuthStateChange(async (event, session)=>{
+    if(session?.user){
+      _sbUser = session.user;
+      document.getElementById('auth-screen').style.display = 'none';
+
+      // Update user avatar
+      const name = session.user.user_metadata?.full_name || session.user.email.split('@')[0];
+      const initials = name.split(' ').map(w=>w[0]).join('').slice(0,2).toUpperCase();
+      const avatarBtn = document.getElementById('user-avatar-btn');
+      avatarBtn.textContent = initials;
+      avatarBtn.style.display = 'block';
+      document.getElementById('sync-dot').style.display = 'block';
+      document.getElementById('user-menu-name').textContent = name;
+      document.getElementById('user-menu-email').textContent = session.user.email;
+
+      // Load local data first for instant UI, then sync from cloud
+      loadState();
+      renderAll();
+      initTelegram();
+      await syncFromSupabase();
+      renderAll(); // re-render with cloud data
+      toast('Welcome back, '+name.split(' ')[0]+'! ☁');
+    } else {
+      _sbUser = null;
+      // Show auth screen
+      document.getElementById('auth-screen').style.display = 'block';
+    }
+  });
+
+  // Check existing session
+  const {data:{session}} = await _sb.auth.getSession();
+  if(!session){
+    // No session — show auth screen
+    // But first load local state so offline mode works instantly
+    loadState(); renderAll(); initTelegram();
+    document.getElementById('auth-screen').style.display = 'block';
+  }
+}
+
+loadState();renderAll();initTelegram();initSupabase();
 </script>
 </body>
 </html>

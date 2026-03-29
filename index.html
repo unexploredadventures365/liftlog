@@ -10,7 +10,7 @@
 <!-- Telegram Mini App SDK — required for running inside Telegram -->
 <script src="https://telegram.org/js/telegram-web-app.js"></script>
 <!-- Supabase JS SDK -->
-<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@400;600;700;900&family=Barlow:wght@400;500;600&display=swap" rel="stylesheet">
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
@@ -5327,11 +5327,17 @@ function renderAll(){
 // ─── SUPABASE INTEGRATION ────────────────────────────────────────────────────
 // ⚙️  CONFIGURE: Replace with your Supabase project values
 // Get these from: Supabase Dashboard → Settings → API
-const SUPABASE_URL = 'https://your-project.supabase.co';
+const SUPABASE_URL = 'https://epdkqvzywhjrmmfiknrq.supabase.co';
 const SUPABASE_ANON_KEY = 'sb_publishable_zl6E61v3Ojz2FhWWeMEIAA_ta1WSm3C';
 
 const _sb = (SUPABASE_URL !== 'YOUR_SUPABASE_URL')
-  ? supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY)
+  ? supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
+      auth: {
+        persistSession: true,
+        autoRefreshToken: true,
+        detectSessionInUrl: true
+      }
+    })
   : null;
 
 let _sbUser = null;           // current logged-in user

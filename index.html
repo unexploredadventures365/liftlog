@@ -477,7 +477,11 @@ select.inp{cursor:pointer}
         <div id="home-macro-bars"></div>
       </div>
       <!-- Add food -->
-      <button class="btn-primary" style="margin-bottom:10px" onclick="openFoodSearch()">+ Add Food</button>
+      <!-- Add food + build recipe buttons -->
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:10px">
+        <button class="btn-primary" onclick="openFoodSearch()">+ Add Food</button>
+        <button class="btn-primary" style="background:var(--surface2);color:var(--text);border:1px solid var(--border)" onclick="openRecipeBuilder()">🧪 Build Recipe</button>
+      </div>
       <!-- Meal log -->
       <div id="home-meal-log"></div>
     </div><!-- end home-food-panel -->
@@ -921,12 +925,55 @@ select.inp{cursor:pointer}
       <div id="food-search-list" style="overflow-y:auto;flex:1;min-height:0"></div>
       <!-- Custom food entry — always pinned at bottom -->
       <div style="padding:10px 16px;border-top:2px solid var(--border);background:var(--surface);flex-shrink:0">
-        <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.8px;color:var(--text3);margin-bottom:6px">Can't find it? Add custom:</div>
-        <div style="display:flex;gap:6px;align-items:center">
-          <input class="inp" id="cf-name" placeholder="Food name" style="flex:2;min-width:0;font-size:13px">
-          <input class="inp" id="cf-kcal" placeholder="kcal" type="number" inputmode="numeric" style="width:60px;font-size:13px">
-          <input class="inp" id="cf-protein" placeholder="protein g" type="number" inputmode="decimal" style="width:72px;font-size:13px">
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px">
+          <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.8px;color:var(--text3)">Can't find it? Add custom food:</div>
+          <button style="background:none;border:none;font-size:11px;color:var(--red);font-weight:700;cursor:pointer" onclick="toggleCustomForm()"  id="cf-toggle">▼ Expand</button>
+        </div>
+        <!-- Collapsed: just name + kcal row -->
+        <div id="cf-collapsed" style="display:flex;gap:6px;align-items:center">
+          <input class="inp" id="cf-name" placeholder="Food name" style="flex:1;min-width:0;font-size:13px">
+          <input class="inp" id="cf-kcal" placeholder="kcal/100g" type="number" inputmode="numeric" style="width:80px;font-size:13px">
           <button class="lib-custom-btn" onclick="addCustomFood()" style="padding:9px 12px;flex-shrink:0">Add</button>
+        </div>
+        <!-- Expanded: all macros -->
+        <div id="cf-expanded" style="display:none;margin-top:6px">
+          <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:6px;margin-bottom:6px">
+            <div>
+              <div style="font-size:10px;font-weight:700;color:var(--text3);margin-bottom:3px">PROTEIN (g)</div>
+              <input class="inp" id="cf-protein" type="number" inputmode="decimal" placeholder="0" style="width:100%;font-size:13px">
+            </div>
+            <div>
+              <div style="font-size:10px;font-weight:700;color:var(--text3);margin-bottom:3px">CARBS (g)</div>
+              <input class="inp" id="cf-carbs" type="number" inputmode="decimal" placeholder="0" style="width:100%;font-size:13px">
+            </div>
+            <div>
+              <div style="font-size:10px;font-weight:700;color:var(--text3);margin-bottom:3px">FAT (g)</div>
+              <input class="inp" id="cf-fat" type="number" inputmode="decimal" placeholder="0" style="width:100%;font-size:13px">
+            </div>
+          </div>
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-bottom:6px">
+            <div>
+              <div style="font-size:10px;font-weight:700;color:var(--text3);margin-bottom:3px">FIBRE (g)</div>
+              <input class="inp" id="cf-fibre" type="number" inputmode="decimal" placeholder="0" style="width:100%;font-size:13px">
+            </div>
+            <div>
+              <div style="font-size:10px;font-weight:700;color:var(--text3);margin-bottom:3px">CATEGORY</div>
+              <select class="inp" id="cf-cat" style="width:100%;font-size:12px">
+                <option value="Custom">Custom</option>
+                <option value="Cereals">Cereals</option>
+                <option value="Pulses">Pulses</option>
+                <option value="Vegetables">Vegetables</option>
+                <option value="Fruits">Fruits</option>
+                <option value="Dairy">Dairy</option>
+                <option value="Meat">Meat</option>
+                <option value="Snacks">Snacks</option>
+                <option value="Mains">Mains</option>
+                <option value="Beverages">Beverages</option>
+                <option value="Sweets">Sweets</option>
+              </select>
+            </div>
+          </div>
+          <button class="btn-primary" onclick="addCustomFood()" style="width:100%">Save & Add Custom Food ✓</button>
         </div>
       </div>
     </div>
@@ -4062,24 +4109,36 @@ function renderHomeWater(log){
 
 function renderHomeMacroBars(tot){
   const el=document.getElementById('home-macro-bars'); if(!el) return;
-  const bw=state.calProfile.wt||75;
-  const proteinTarget=Math.round(bw*1.5);
+  const rda=getRDA();
+  const log=getFoodLog();
+  const waterMl=log.water||0;
   const macros=[
-    {key:'kcal',  label:'Calories', unit:'kcal', color:'#E24B4A', target:getRDA().kcal},
-    {key:'protein',label:'Protein', unit:'g',    color:'#185FA5', target:proteinTarget},
-    {key:'carbs', label:'Carbs',    unit:'g',    color:'#f97316', target:getRDA().carbs},
-    {key:'fat',   label:'Fat',      unit:'g',    color:'#eab308', target:getRDA().fat},
-    {key:'fibre', label:'Fibre',    unit:'g',    color:'#22c55e', target:getRDA().fibre},
+    {key:'kcal',   label:'Calories',unit:'kcal',color:'#E24B4A',target:rda.kcal},
+    {key:'protein',label:'Protein', unit:'g',   color:'#185FA5',target:rda.protein},
+    {key:'carbs',  label:'Carbs',   unit:'g',   color:'#f97316',target:rda.carbs},
+    {key:'fat',    label:'Fat',     unit:'g',   color:'#eab308',target:rda.fat},
+    {key:'fibre',  label:'Fibre',   unit:'g',   color:'#22c55e',target:rda.fibre},
   ];
-  el.innerHTML=macros.map(m=>{
+  const macroHTML=macros.map(m=>{
     const val=m.key==='kcal'?Math.round(tot[m.key]||0):((tot[m.key]||0).toFixed(1));
     const pct=Math.min(100,Math.round((parseFloat(val)||0)/m.target*100));
     const over=parseFloat(val)>m.target;
-    return `<div class="macro-bar-row">
-      <div class="macro-bar-label"><span>${m.label}</span><span style="color:${over?'#dc2626':m.color}">${val}${m.unit}<span style="color:var(--text3);font-weight:400"> / ${m.target}${m.unit}</span></span></div>
-      <div class="macro-bar-track"><div class="macro-bar-fill" style="width:${pct}%;background:${over?'#dc2626':m.color}"></div></div>
-    </div>`;
+    return '<div class="macro-bar-row">'+
+      '<div class="macro-bar-label"><span>'+m.label+'</span>'+
+      '<span style="color:'+(over?'#dc2626':m.color)+'">'+val+m.unit+
+      '<span style="color:var(--text3);font-weight:400"> / '+m.target+m.unit+'</span></span></div>'+
+      '<div class="macro-bar-track"><div class="macro-bar-fill" style="width:'+pct+'%;background:'+(over?'#dc2626':m.color)+'"></div></div>'+
+    '</div>';
   }).join('');
+  const waterPct=Math.min(100,Math.round(waterMl/rda.water*100));
+  const wc=waterPct>=100?'#22c55e':'#185FA5';
+  const waterHTML='<div class="macro-bar-row">'+
+    '<div class="macro-bar-label"><span>💧 Water</span>'+
+    '<span style="color:'+wc+'">'+(waterMl/1000).toFixed(1)+'L'+
+    '<span style="color:var(--text3);font-weight:400"> / '+(rda.water/1000).toFixed(1)+'L</span></span></div>'+
+    '<div class="macro-bar-track"><div class="macro-bar-fill" style="width:'+waterPct+'%;background:'+wc+'"></div></div>'+
+  '</div>';
+  el.innerHTML=macroHTML+waterHTML;
 }
 
 function renderHomeMealLog(log){
@@ -4994,25 +5053,55 @@ function confirmAddFood(){
   if(homeMode==='food') renderHomeFoodPanel();
   toast(`Added ${f.name} to ${_fSelectedMeal}!`);
 }
+function toggleCustomForm(){
+  const exp=document.getElementById('cf-expanded');
+  const col=document.getElementById('cf-collapsed');
+  const btn=document.getElementById('cf-toggle');
+  if(!exp) return;
+  const isExpanded=exp.style.display!=='none';
+  exp.style.display=isExpanded?'none':'block';
+  col.style.display=isExpanded?'flex':'none';
+  btn.textContent=isExpanded?'▼ Expand':'▲ Collapse';
+}
+
 function addCustomFood(){
   const name=document.getElementById('cf-name').value.trim();
   const kcal=parseFloat(document.getElementById('cf-kcal').value)||0;
-  const protein=parseFloat(document.getElementById('cf-protein').value)||0;
-  if(!name||!kcal){toast('Enter name and calories');return;}
+  const protein=parseFloat(document.getElementById('cf-protein')?.value)||0;
+  const carbs=parseFloat(document.getElementById('cf-carbs')?.value)||0;
+  const fat=parseFloat(document.getElementById('cf-fat')?.value)||0;
+  const fibre=parseFloat(document.getElementById('cf-fibre')?.value)||0;
+  const cat=document.getElementById('cf-cat')?.value||'Custom';
+
+  if(!name){toast('Enter a food name');return;}
+  if(!kcal){toast('Enter calories per 100g');return;}
   if(FOOD_DB.find(f=>f.name.toLowerCase()===name.toLowerCase())){
     toast('Food already exists — search for it above');return;
   }
-  const f={name,cat:'Custom',kcal,protein,carbs:0,fat:0,fibre:0,ca:0,fe:0,vitC:0,vitA:0,zinc:0,potassium:0,b1:0,b2:0,b3:0,_custom:true};
+
+  const f={name,cat,kcal,protein,carbs,fat,fibre,
+    ca:0,fe:0,vitC:0,vitA:0,zinc:0,potassium:0,b1:0,b2:0,b3:0,_custom:true};
   FOOD_DB.push(f);
   if(!state.customFoods) state.customFoods=[];
   state.customFoods.push(f);
   saveState();
-  document.getElementById('cf-name').value='';
-  document.getElementById('cf-kcal').value='';
-  document.getElementById('cf-protein').value='';
+
+  // Clear all fields
+  ['cf-name','cf-kcal','cf-protein','cf-carbs','cf-fat','cf-fibre'].forEach(id=>{
+    const el=document.getElementById(id); if(el) el.value='';
+  });
+  // Collapse back to simple view
+  const exp=document.getElementById('cf-expanded');
+  const col=document.getElementById('cf-collapsed');
+  const btn=document.getElementById('cf-toggle');
+  if(exp) exp.style.display='none';
+  if(col) col.style.display='flex';
+  if(btn) btn.textContent='▼ Expand';
+
   renderFoodSearchList();
+  renderFoodCategoryChips();
   openFoodQty(name);
-  toast(`"${name}" saved to your food list!`);
+  toast('"'+name+'" saved! '+kcal+' kcal · P:'+protein+'g C:'+carbs+'g Fat:'+fat+'g Fibre:'+fibre+'g');
 }
 
 // ─── INIT
@@ -5054,7 +5143,10 @@ function showPage(name){
   if(name==='records') renderRecordsPage();
   if(name==='report') showReport(reportPeriod);
   if(name==='programs') renderProgramsPage();
+  if(name==='bodyage') renderCaloriesPage(); // pre-fill profile fields
   if(name==='food'){foodDate=todayStr();renderFoodPage();}
+  // Stop step counter if navigating away from home
+  if(name!=='workout' && _stepListening) stopStepCounter();
 }
 
 function renderAll(){

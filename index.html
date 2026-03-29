@@ -400,16 +400,64 @@ select.inp{cursor:pointer}
           <input class="inp" id="auth-email" type="email" placeholder="you@example.com" inputmode="email"
             style="width:100%;font-size:15px" autocomplete="email">
         </div>
-        <div style="margin-bottom:20px">
+        <div style="margin-bottom:6px">
           <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.8px;color:var(--text3);margin-bottom:5px">Password</div>
           <input class="inp" id="auth-password" type="password" placeholder="••••••••"
             style="width:100%;font-size:15px" autocomplete="current-password">
         </div>
+        <!-- Forgot password link -->
+        <div style="text-align:right;margin-bottom:18px">
+          <button onclick="showForgotPassword()" style="background:none;border:none;color:var(--text3);font-size:12px;cursor:pointer;padding:4px">
+            Forgot password?
+          </button>
+        </div>
         <button class="btn-primary" onclick="authLogin()" id="auth-login-btn" style="width:100%;font-size:16px;padding:14px">
           Sign In →
         </button>
-        <button onclick="authMagicLink()" style="width:100%;margin-top:10px;background:none;border:none;color:var(--text3);font-size:13px;cursor:pointer;padding:8px">
-          Send magic link instead
+        <!-- OTP option - works inside Telegram -->
+        <button onclick="showOtpForm()" style="width:100%;margin-top:10px;background:none;border:none;color:var(--text3);font-size:13px;cursor:pointer;padding:8px">
+          Sign in with email code instead
+        </button>
+      </div>
+
+      <!-- OTP form — stays inside Telegram -->
+      <div id="auth-form-otp" style="display:none">
+        <div style="background:var(--surface2);border-radius:10px;padding:10px 12px;margin-bottom:14px;font-size:12px;color:var(--text2);line-height:1.5">
+          📧 We'll send a 6-digit code to your email. Enter it here — no need to tap any links.
+        </div>
+        <div style="margin-bottom:12px">
+          <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.8px;color:var(--text3);margin-bottom:5px">Email</div>
+          <input class="inp" id="otp-email" type="email" placeholder="you@example.com" inputmode="email"
+            style="width:100%;font-size:15px" autocomplete="email">
+        </div>
+        <div id="otp-code-section" style="display:none;margin-bottom:12px">
+          <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.8px;color:var(--text3);margin-bottom:5px">6-digit code</div>
+          <input class="inp" id="otp-code" type="number" inputmode="numeric" placeholder="123456"
+            style="width:100%;font-size:20px;letter-spacing:8px;text-align:center">
+        </div>
+        <button class="btn-primary" id="otp-send-btn" onclick="sendOtp()" style="width:100%;font-size:16px;padding:14px">
+          Send Code →
+        </button>
+        <button onclick="showLoginForm()" style="width:100%;margin-top:10px;background:none;border:none;color:var(--text3);font-size:13px;cursor:pointer;padding:8px">
+          ← Back to password sign in
+        </button>
+      </div>
+
+      <!-- Forgot password form -->
+      <div id="auth-form-forgot" style="display:none">
+        <div style="background:var(--surface2);border-radius:10px;padding:10px 12px;margin-bottom:14px;font-size:12px;color:var(--text2);line-height:1.5">
+          🔑 Enter your email and we'll send a password reset link.
+        </div>
+        <div style="margin-bottom:18px">
+          <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.8px;color:var(--text3);margin-bottom:5px">Email</div>
+          <input class="inp" id="forgot-email" type="email" placeholder="you@example.com" inputmode="email"
+            style="width:100%;font-size:15px" autocomplete="email">
+        </div>
+        <button class="btn-primary" onclick="authForgotPassword()" id="forgot-btn" style="width:100%;font-size:16px;padding:14px">
+          Send Reset Link →
+        </button>
+        <button onclick="showLoginForm()" style="width:100%;margin-top:10px;background:none;border:none;color:var(--text3);font-size:13px;cursor:pointer;padding:8px">
+          ← Back to sign in
         </button>
       </div>
 
@@ -5221,12 +5269,14 @@ function initTelegram(){
   function applyTgTheme(){
     const tp=tg.themeParams||{};
     const root=document.documentElement;
+    // Only sync background and text colors from Telegram theme
+    // Never override --red (LiftLog brand color)
     if(tp.bg_color) root.style.setProperty('--bg',tp.bg_color);
     if(tp.secondary_bg_color) root.style.setProperty('--surface',tp.secondary_bg_color);
     if(tp.text_color) root.style.setProperty('--text',tp.text_color);
     if(tp.hint_color) root.style.setProperty('--text3',tp.hint_color);
-    if(tp.button_color) root.style.setProperty('--red',tp.button_color);
-    if(tp.button_text_color) root.style.setProperty('--text-on-red',tp.button_text_color);
+    // Always keep LiftLog's brand red regardless of Telegram theme
+    root.style.setProperty('--red','#E24B4A');
   }
   applyTgTheme();
   tg.onEvent('themeChanged',applyTgTheme);
@@ -5398,14 +5448,93 @@ async function authSignup(){
   else showAuthInfo('✓ Account created! Check your email to confirm, then sign in.');
 }
 
-async function authMagicLink(){
+// Auth form navigation
+function showLoginForm(){
+  document.getElementById('auth-form-login').style.display='block';
+  document.getElementById('auth-form-otp').style.display='none';
+  document.getElementById('auth-form-forgot').style.display='none';
+  document.getElementById('auth-msg').textContent='';
+}
+function showOtpForm(){
+  document.getElementById('auth-form-login').style.display='none';
+  document.getElementById('auth-form-otp').style.display='block';
+  document.getElementById('auth-form-forgot').style.display='none';
+  // Pre-fill email if already typed
+  const email=document.getElementById('auth-email').value.trim();
+  if(email) document.getElementById('otp-email').value=email;
+  document.getElementById('auth-msg').textContent='';
+}
+function showForgotPassword(){
+  document.getElementById('auth-form-login').style.display='none';
+  document.getElementById('auth-form-otp').style.display='none';
+  document.getElementById('auth-form-forgot').style.display='block';
+  // Pre-fill email if already typed
+  const email=document.getElementById('auth-email').value.trim();
+  if(email) document.getElementById('forgot-email').value=email;
+  document.getElementById('auth-msg').textContent='';
+}
+
+// OTP sign in — sends 6-digit code, user types it in-app (works inside Telegram)
+let _otpEmailSent='';
+async function sendOtp(){
   if(!_sb){showAuthError('Supabase not configured yet.');return;}
-  const email = document.getElementById('auth-email').value.trim();
+  const email=document.getElementById('otp-email').value.trim();
+  const codeSection=document.getElementById('otp-code-section');
+  const btn=document.getElementById('otp-send-btn');
+
+  // If code section is visible, verify the code
+  if(codeSection.style.display!=='none'){
+    const token=document.getElementById('otp-code').value.trim();
+    if(!token||token.length<6){showAuthError('Enter the 6-digit code');return;}
+    btn.textContent='Verifying…'; btn.disabled=true;
+    const {error}=await _sb.auth.verifyOtp({email:_otpEmailSent, token, type:'email'});
+    btn.textContent='Verify Code →'; btn.disabled=false;
+    if(error) showAuthError(error.message);
+    return;
+  }
+
+  // Send the OTP code
   if(!email){showAuthError('Enter your email first');return;}
-  showAuthInfo('Sending link…');
-  const {error} = await _sb.auth.signInWithOtp({email});
+  btn.textContent='Sending…'; btn.disabled=true;
+  const {error}=await _sb.auth.signInWithOtp({
+    email,
+    options:{shouldCreateUser:false}
+  });
+  btn.textContent='Send Code →'; btn.disabled=false;
+  if(error){
+    // If user doesn't exist, show helpful message
+    if(error.message.includes('not found')||error.message.includes('not exist')){
+      showAuthError('No account found. Please sign up first.');
+    } else {
+      showAuthError(error.message);
+    }
+    return;
+  }
+  _otpEmailSent=email;
+  // Show code input
+  codeSection.style.display='block';
+  btn.textContent='Verify Code →';
+  showAuthInfo('✓ Code sent to '+email+' — check your inbox');
+}
+
+// Forgot password — sends reset link
+async function authForgotPassword(){
+  if(!_sb){showAuthError('Supabase not configured yet.');return;}
+  const email=document.getElementById('forgot-email').value.trim();
+  if(!email){showAuthError('Enter your email');return;}
+  const btn=document.getElementById('forgot-btn');
+  btn.textContent='Sending…'; btn.disabled=true;
+  const {error}=await _sb.auth.resetPasswordForEmail(email,{
+    redirectTo:'https://liftlog-mu.vercel.app'
+  });
+  btn.textContent='Send Reset Link →'; btn.disabled=false;
   if(error) showAuthError(error.message);
-  else showAuthInfo('✓ Magic link sent! Check your email.');
+  else showAuthInfo('✓ Reset link sent! Check your email.');
+}
+
+async function authMagicLink(){
+  // Redirect to OTP form instead — magic links don't work inside Telegram
+  showOtpForm();
 }
 
 async function authLogout(){

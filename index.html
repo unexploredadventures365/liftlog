@@ -541,17 +541,27 @@ select.inp{cursor:pointer}
 
       <!-- Manual sync from health app -->
       <div class="card" style="padding:14px;margin-bottom:10px">
-        <div style="font-family:var(--font-cond);font-weight:700;font-size:15px;text-transform:uppercase;margin-bottom:4px">Sync from Health App</div>
-        <div style="font-size:12px;color:var(--text3);margin-bottom:10px;line-height:1.5">
-          Check your steps in <b>Google Fit</b> or <b>Apple Health</b> and enter the total here — replaces today's count with the accurate hardware value.
+        <div style="font-family:var(--font-cond);font-weight:700;font-size:15px;text-transform:uppercase;margin-bottom:6px">📲 Sync from Health App</div>
+        <!-- Android / iOS tabs -->
+        <div style="display:flex;gap:6px;margin-bottom:8px">
+          <button class="food-meal-btn active" id="sync-tab-android" onclick="setSyncTab('android')" style="font-size:11px">🤖 Android</button>
+          <button class="food-meal-btn" id="sync-tab-ios" onclick="setSyncTab('ios')" style="font-size:11px">🍎 iPhone</button>
+        </div>
+        <div id="sync-instructions-android" style="font-size:12px;color:var(--text3);line-height:1.6;margin-bottom:8px;padding:8px;background:var(--surface2);border-radius:8px">
+          1. Open <b style="color:var(--text2)">Google Fit</b> app<br>
+          2. Tap <b style="color:var(--text2)">Today</b> tab at bottom<br>
+          3. Your step count is shown at the top<br>
+          4. Enter that number below ↓
+        </div>
+        <div id="sync-instructions-ios" style="display:none;font-size:12px;color:var(--text3);line-height:1.6;margin-bottom:8px;padding:8px;background:var(--surface2);border-radius:8px">
+          1. Open <b style="color:var(--text2)">Apple Health</b> app<br>
+          2. Tap <b style="color:var(--text2)">Summary</b> at bottom<br>
+          3. Tap <b style="color:var(--text2)">Steps</b> in the Activity section<br>
+          4. Enter today's count below ↓
         </div>
         <div style="display:flex;gap:8px;align-items:center">
-          <input class="inp" id="step-manual-input" type="number" inputmode="numeric" placeholder="e.g. 7500" style="flex:1">
-          <button class="btn-primary" style="flex-shrink:0" onclick="syncManualSteps()">Sync ✓</button>
-        </div>
-        <div style="margin-top:10px;padding:10px;background:var(--surface2);border-radius:10px;font-size:11px;color:var(--text3);line-height:1.6">
-          <b style="color:var(--text2)">Android:</b> Open Google Fit → Today → Steps shown at top<br>
-          <b style="color:var(--text2)">iOS:</b> Open Apple Health → Summary → Steps
+          <input class="inp" id="step-manual-input" type="number" inputmode="numeric" placeholder="Enter steps e.g. 7500" style="flex:1;font-size:14px">
+          <button class="btn-primary" style="flex-shrink:0;padding:10px 16px" onclick="syncManualSteps()">Sync ✓</button>
         </div>
       </div>
 
@@ -698,18 +708,23 @@ select.inp{cursor:pointer}
   <!-- Existing pages follow -->
   <div class="page" id="page-calories">
     <div class="card" id="cal-profile-card">
-      <div class="section-title">Your Profile <span style="font-size:10px;color:var(--text3);font-weight:400;text-transform:none;letter-spacing:0">(used for accurate calorie calculation)</span></div>
-      <div class="input-row"><label>Body Weight</label><input class="inp" id="cp-wt" type="number" placeholder="75 kg" inputmode="decimal"><span style="font-size:13px;color:var(--text2);margin-left:4px">kg</span></div>
+      <div class="section-title">Your Profile <span style="font-size:10px;color:var(--text3);font-weight:400;text-transform:none;letter-spacing:0">(nutrition targets auto-update when saved)</span></div>
+      <div class="input-row"><label>Body Weight</label><input class="inp" id="cp-wt" type="number" placeholder="75" inputmode="decimal"><span style="font-size:13px;color:var(--text2);margin-left:4px">kg</span></div>
+      <div class="input-row"><label>Height</label><input class="inp" id="cp-ht" type="number" placeholder="170" inputmode="numeric"><span style="font-size:13px;color:var(--text2);margin-left:4px">cm</span></div>
       <div class="input-row"><label>Gender</label><select class="inp" id="cp-gender"><option value="male">Male</option><option value="female">Female</option></select></div>
       <div class="input-row"><label>Age</label><input class="inp" id="cp-age" type="number" placeholder="28" inputmode="numeric"></div>
       <div class="input-row"><label>Fitness Level</label>
         <select class="inp" id="cp-fit">
-          <option value="beginner">Beginner</option>
-          <option value="intermediate" selected>Intermediate</option>
-          <option value="advanced">Advanced</option>
+          <option value="beginner">Sedentary / Beginner</option>
+          <option value="intermediate" selected>Moderate / Intermediate</option>
+          <option value="advanced">Very Active / Advanced</option>
         </select>
       </div>
-      <button class="btn-primary" style="background:var(--surface2);color:var(--text);border:1px solid var(--border)" onclick="saveCalProfile()">Save Profile</button>
+      <div class="input-row"><label>Daily Water Goal</label><input class="inp" id="cp-water-goal" type="number" placeholder="auto" step="0.1" inputmode="decimal"><span style="font-size:13px;color:var(--text2);margin-left:4px">L/day</span></div>
+      <div style="font-size:11px;color:var(--text3);margin-bottom:10px">Leave water blank to auto-set (35ml × body weight)</div>
+      <button class="btn-primary" onclick="saveCalProfile()">Save Profile — Update All Targets ✓</button>
+      <!-- Live preview of targets -->
+      <div id="cp-targets-preview" style="margin-top:10px;display:grid;grid-template-columns:repeat(3,1fr);gap:6px"></div>
     </div>
 
     <div class="stat-row" style="grid-template-columns:repeat(3,1fr)">
@@ -871,8 +886,11 @@ select.inp{cursor:pointer}
       </div>
     </div>
 
-    <!-- Add food button -->
-    <button class="btn-primary" style="margin-bottom:10px" onclick="openFoodSearch()">+ Add Food</button>
+    <!-- Add food + build recipe buttons -->
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:10px">
+      <button class="btn-primary" onclick="openFoodSearch()">+ Add Food</button>
+      <button class="btn-primary" style="background:var(--surface2);color:var(--text);border:1px solid var(--border)" onclick="openRecipeBuilder()">🧪 Build Recipe</button>
+    </div>
 
     <!-- Meal log -->
     <div id="food-meal-log"></div>
@@ -945,6 +963,45 @@ select.inp{cursor:pointer}
       <!-- Add button ALWAYS visible at bottom, outside scroll -->
       <div style="padding:12px 16px;flex-shrink:0;border-top:1px solid var(--border);background:var(--bg)">
         <button class="btn-primary" onclick="confirmAddFood()" style="margin:0">Add to Log ✓</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- RECIPE BUILDER MODAL -->
+  <div class="modal-overlay" id="recipe-modal" style="display:none" onclick="if(event.target===this)closeRecipeBuilder()">
+    <div class="modal-sheet" style="max-height:95vh;display:flex;flex-direction:column;overflow:hidden">
+      <div class="modal-handle" style="flex-shrink:0"></div>
+      <div class="modal-header" style="flex-shrink:0">
+        <div class="modal-title">🧪 Recipe / Ingredient Builder</div>
+        <button class="modal-close" onclick="closeRecipeBuilder()">×</button>
+      </div>
+      <!-- Recipe name + meal -->
+      <div style="padding:8px 16px;border-bottom:1px solid var(--border);flex-shrink:0;display:flex;gap:8px;align-items:center">
+        <input class="inp" id="recipe-name" placeholder="Recipe name (e.g. Dal Rice, Salad)" style="flex:2;font-size:13px">
+        <select class="inp" id="recipe-meal" style="flex:1;font-size:12px">
+          <option value="breakfast">Breakfast</option>
+          <option value="lunch" selected>Lunch</option>
+          <option value="dinner">Dinner</option>
+          <option value="snack">Snack</option>
+        </select>
+      </div>
+      <!-- Ingredient search -->
+      <div style="padding:8px 16px;border-bottom:1px solid var(--border);flex-shrink:0">
+        <input class="inp" id="recipe-search" placeholder="Search ingredient to add…" oninput="filterRecipeSearch()" autocomplete="off" style="width:100%;font-size:14px">
+      </div>
+      <!-- Ingredient search results -->
+      <div id="recipe-search-results" style="max-height:180px;overflow-y:auto;border-bottom:2px solid var(--border);flex-shrink:0"></div>
+      <!-- Added ingredients list -->
+      <div style="flex:1;overflow-y:auto;padding:0 16px 8px">
+        <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.8px;color:var(--text3);padding:8px 0 4px">Added Ingredients</div>
+        <div id="recipe-ingredients-list"></div>
+        <!-- Totals -->
+        <div id="recipe-totals" style="margin-top:8px;padding:10px;background:var(--surface2);border-radius:10px;display:none"></div>
+      </div>
+      <!-- Footer -->
+      <div style="padding:12px 16px;border-top:1px solid var(--border);background:var(--bg);flex-shrink:0;display:flex;gap:8px">
+        <button class="btn-primary" style="flex:1" onclick="logRecipe()">Add to Log ✓</button>
+        <button class="btn-outline" onclick="clearRecipe()">Clear</button>
       </div>
     </div>
   </div>
@@ -2068,19 +2125,46 @@ function setCalRange(days){
 
 function saveCalProfile(){
   const wt=parseFloat(document.getElementById('cp-wt').value)||75;
+  const ht=parseFloat(document.getElementById('cp-ht').value)||170;
   const gender=document.getElementById('cp-gender').value;
   const age=parseInt(document.getElementById('cp-age').value)||28;
   const fit=document.getElementById('cp-fit').value;
-  state.calProfile={wt,gender,age,fit};
-  saveState(); renderCaloriesPage(); toast('Profile saved!');
+  const waterGoalInput=parseFloat(document.getElementById('cp-water-goal').value);
+  const waterGoal=waterGoalInput>0?Math.round(waterGoalInput*1000):Math.round(wt*35/100)*100;
+  state.calProfile={wt,ht,gender,age,fit,waterGoal};
+  saveState();
+  renderCaloriesPage();
+  // Refresh food page nutrition targets if visible
+  if(homeMode==='food') renderHomeFoodPanel();
+  renderFoodPage();
+  toast('Profile saved! Nutrition targets updated ✓');
 }
 
 function renderCaloriesPage(){
-  // populate profile fields
-  document.getElementById('cp-wt').value=state.calProfile.wt||'';
-  document.getElementById('cp-gender').value=state.calProfile.gender||'male';
-  document.getElementById('cp-age').value=state.calProfile.age||'';
-  document.getElementById('cp-fit').value=state.calProfile.fit||'intermediate';
+  const p=state.calProfile||{};
+  document.getElementById('cp-wt').value=p.wt||'';
+  document.getElementById('cp-ht').value=p.ht||'';
+  document.getElementById('cp-gender').value=p.gender||'male';
+  document.getElementById('cp-age').value=p.age||'';
+  document.getElementById('cp-fit').value=p.fit||'intermediate';
+  // Show water goal in L if set
+  const wg=document.getElementById('cp-water-goal');
+  if(p.waterGoal) wg.value=(p.waterGoal/1000).toFixed(1); else wg.value='';
+
+  // Live targets preview
+  const rda=getRDA();
+  const prev=document.getElementById('cp-targets-preview');
+  if(prev) prev.innerHTML=[
+    {label:'Calories',val:rda.kcal,unit:'kcal',color:'var(--red)'},
+    {label:'Protein',val:rda.protein,unit:'g',color:'#185FA5'},
+    {label:'Carbs',val:rda.carbs,unit:'g',color:'#f97316'},
+    {label:'Fat',val:rda.fat,unit:'g',color:'#eab308'},
+    {label:'Water',val:(rda.water/1000).toFixed(1),unit:'L',color:'#185FA5'},
+    {label:'Fibre',val:rda.fibre,unit:'g',color:'#22c55e'},
+  ].map(t=>'<div style="text-align:center;background:var(--surface2);border-radius:8px;padding:6px 2px">'+
+    '<div style="font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--text3)">'+t.label+'</div>'+
+    '<div style="font-family:var(--font-cond);font-weight:900;font-size:16px;color:'+t.color+'">'+t.val+t.unit+'</div>'+
+    '</div>').join('');
 
   const todayS=todayStr();
   // Aggregate calories per date
@@ -3837,6 +3921,13 @@ function resetTodaySteps(){
   toast('Step count reset');
 }
 
+function setSyncTab(tab){
+  document.getElementById('sync-tab-android').classList.toggle('active',tab==='android');
+  document.getElementById('sync-tab-ios').classList.toggle('active',tab==='ios');
+  document.getElementById('sync-instructions-android').style.display=tab==='android'?'block':'none';
+  document.getElementById('sync-instructions-ios').style.display=tab==='ios'?'block':'none';
+}
+
 function syncManualSteps(){
   const val=parseInt(document.getElementById('step-manual-input').value)||0;
   if(!val||val<0){toast('Enter a valid step count');return;}
@@ -3950,17 +4041,21 @@ function renderHomeFoodPanel(){
 }
 
 function renderHomeWater(log){
-  const glasses=Math.round((log.water||0)/250);
-  const target=8;
+  const rda=getRDA();
+  const goalMl=rda.water||2000;
+  const cupMl=250;
+  const totalCups=Math.round(goalMl/cupMl);
+  const filledCups=Math.min(totalCups,Math.round((log.water||0)/cupMl));
+  const pct=Math.min(100,Math.round((log.water||0)/goalMl*100));
   const disp=document.getElementById('home-water-display');
-  if(disp) disp.textContent=`${((log.water||0)/1000).toFixed(1)}L / ${target} glasses`;
+  if(disp) disp.innerHTML=`<span style="color:${pct>=100?'#22c55e':'#185FA5'}">${((log.water||0)/1000).toFixed(1)}L</span><span style="color:var(--text3);font-size:13px"> / ${(goalMl/1000).toFixed(1)}L</span>`;
   const wrap=document.getElementById('home-water-glasses'); if(!wrap) return;
   wrap.innerHTML='';
-  for(let i=0;i<target;i++){
+  for(let i=0;i<totalCups;i++){
     const g=document.createElement('div');
-    g.className='water-glass'+(i<glasses?' filled':'');
-    g.textContent=i<glasses?'💧':'○';
-    g.onclick=()=>{log.water=Math.max(0,(i+1)*250);if(i<glasses)log.water=i*250;saveState();renderHomeFoodPanel();if(homeMode!=='food')renderFoodPage();};
+    g.className='water-glass'+(i<filledCups?' filled':'');
+    g.textContent=i<filledCups?'💧':'○';
+    g.onclick=()=>{log.water=Math.max(0,(i+1)*cupMl);if(i<filledCups)log.water=i*cupMl;saveState();renderHomeFoodPanel();renderFoodPage();};
     wrap.appendChild(g);
   }
 }
@@ -4025,6 +4120,336 @@ function removeHomeFoodLog(meal,idx){
 // Indian Food Database — per 100g values from ICMR-NIN 2017
 // {name, cat, kcal, protein, carbs, fat, fibre, ca, fe, vitC, vitA, zinc, potassium, b1, b2, b3}
 // Units: kcal, g, g, g, g, mg, mg, mg, µg, mg, mg, mg, mg, mg
+// ─── INGREDIENTS DATABASE (per 100g/ml) ──────────────────────────────────────
+// For recipe builder — raw ingredients with precise nutritional values
+// {name, cat, kcal, protein, carbs, fat, fibre, ca, fe, vitC, vitA, zinc, potassium, b1, b2, b3}
+const INGREDIENTS_DB=[
+  // GRAINS & FLOUR
+  {name:'Rice (raw)',cat:'Grains',kcal:365,protein:7.1,carbs:80.0,fat:0.7,fibre:1.3,ca:28,fe:0.8,vitC:0,vitA:0,zinc:1.1,potassium:115,b1:0.16,b2:0.05,b3:1.9},
+  {name:'Wheat Flour (atta)',cat:'Grains',kcal:341,protein:11.8,carbs:69.4,fat:1.7,fibre:1.9,ca:48,fe:4.9,vitC:0,vitA:0,zinc:1.5,potassium:284,b1:0.41,b2:0.14,b3:4.3},
+  {name:'Maida (refined flour)',cat:'Grains',kcal:348,protein:10.4,carbs:73.9,fat:0.9,fibre:0.4,ca:23,fe:2.1,vitC:0,vitA:0,zinc:0.8,potassium:107,b1:0.12,b2:0.06,b3:1.2},
+  {name:'Besan (chickpea flour)',cat:'Grains',kcal:387,protein:22.5,carbs:57.8,fat:6.7,fibre:10.8,ca:45,fe:4.4,vitC:0,vitA:3,zinc:2.4,potassium:444,b1:0.49,b2:0.13,b3:1.5},
+  {name:'Semolina (rava/sooji)',cat:'Grains',kcal:360,protein:12.0,carbs:73.9,fat:1.1,fibre:3.9,ca:19,fe:1.8,vitC:0,vitA:0,zinc:0.8,potassium:186,b1:0.54,b2:0.10,b3:3.5},
+  {name:'Oats (rolled)',cat:'Grains',kcal:389,protein:16.9,carbs:66.3,fat:6.9,fibre:10.6,ca:54,fe:4.7,vitC:0,vitA:0,zinc:4.0,potassium:429,b1:0.76,b2:0.14,b3:1.1},
+  {name:'Poha (flattened rice)',cat:'Grains',kcal:369,protein:6.5,carbs:79.5,fat:1.1,fibre:0.8,ca:20,fe:20.0,vitC:0,vitA:0,zinc:1.0,potassium:120,b1:0.03,b2:0.02,b3:0.6},
+  {name:'Ragi (finger millet)',cat:'Grains',kcal:328,protein:7.3,carbs:66.8,fat:1.5,fibre:3.6,ca:344,fe:3.9,vitC:0,vitA:0,zinc:2.3,potassium:408,b1:0.42,b2:0.19,b3:1.1},
+  {name:'Bajra (pearl millet)',cat:'Grains',kcal:361,protein:11.6,carbs:67.5,fat:5.0,fibre:1.2,ca:42,fe:8.0,vitC:0,vitA:0,zinc:2.5,potassium:307,b1:0.33,b2:0.25,b3:2.3},
+  {name:'Jowar (sorghum)',cat:'Grains',kcal:349,protein:10.4,carbs:70.7,fat:1.9,fibre:1.6,ca:25,fe:4.1,vitC:0,vitA:0,zinc:1.6,potassium:350,b1:0.37,b2:0.13,b3:3.1},
+  {name:'Quinoa (raw)',cat:'Grains',kcal:368,protein:14.1,carbs:64.2,fat:6.1,fibre:7.0,ca:47,fe:4.6,vitC:0,vitA:0,zinc:3.1,potassium:563,b1:0.36,b2:0.32,b3:1.5},
+  {name:'Bread crumbs',cat:'Grains',kcal:395,protein:13.4,carbs:73.5,fat:5.3,fibre:3.8,ca:183,fe:4.5,vitC:0,vitA:0,zinc:1.2,potassium:213,b1:0.54,b2:0.37,b3:5.7},
+  {name:'Cornflour (maize starch)',cat:'Grains',kcal:381,protein:0.3,carbs:91.3,fat:0.1,fibre:0.9,ca:2,fe:0.5,vitC:0,vitA:0,zinc:0.0,potassium:3,b1:0,b2:0,b3:0},
+
+  // PULSES & LENTILS (raw/dry)
+  {name:'Toor Dal (raw)',cat:'Pulses',kcal:335,protein:22.3,carbs:57.6,fat:1.7,fibre:15.0,ca:73,fe:2.7,vitC:0,vitA:0,zinc:2.6,potassium:1392,b1:0.45,b2:0.19,b3:2.9},
+  {name:'Moong Dal (raw)',cat:'Pulses',kcal:347,protein:24.5,carbs:59.9,fat:1.2,fibre:16.3,ca:124,fe:6.7,vitC:4,vitA:3,zinc:2.7,potassium:1246,b1:0.62,b2:0.23,b3:2.3},
+  {name:'Masoor Dal (raw)',cat:'Pulses',kcal:353,protein:24.6,carbs:63.4,fat:1.1,fibre:31.0,ca:56,fe:7.5,vitC:1,vitA:0,zinc:3.3,potassium:677,b1:0.87,b2:0.21,b3:2.6},
+  {name:'Chana Dal (raw)',cat:'Pulses',kcal:372,protein:20.5,carbs:61.7,fat:5.3,fibre:17.4,ca:202,fe:6.5,vitC:3,vitA:9,zinc:3.4,potassium:846,b1:0.48,b2:0.21,b3:1.8},
+  {name:'Rajma (kidney beans, raw)',cat:'Pulses',kcal:333,protein:23.6,carbs:60.1,fat:1.5,fibre:24.9,ca:143,fe:8.2,vitC:5,vitA:0,zinc:2.8,potassium:1359,b1:0.53,b2:0.22,b3:1.5},
+  {name:'Chickpeas (raw)',cat:'Pulses',kcal:364,protein:19.3,carbs:60.7,fat:6.0,fibre:17.4,ca:105,fe:6.2,vitC:4,vitA:3,zinc:3.4,potassium:875,b1:0.48,b2:0.21,b3:1.5},
+  {name:'Black Urad Dal (raw)',cat:'Pulses',kcal:341,protein:25.1,carbs:59.0,fat:1.4,fibre:18.3,ca:138,fe:9.1,vitC:0,vitA:0,zinc:3.4,potassium:983,b1:0.40,b2:0.28,b3:1.5},
+  {name:'Soya Bean (raw)',cat:'Pulses',kcal:446,protein:36.5,carbs:30.2,fat:19.9,fibre:9.3,ca:277,fe:15.7,vitC:6,vitA:0,zinc:4.9,potassium:1797,b1:0.87,b2:0.87,b3:1.6},
+  {name:'Peas (dry)',cat:'Pulses',kcal:341,protein:21.3,carbs:62.1,fat:1.2,fibre:16.3,ca:74,fe:5.1,vitC:0,vitA:0,zinc:2.6,potassium:985,b1:0.73,b2:0.22,b3:2.9},
+
+  // VEGETABLES (raw)
+  {name:'Onion',cat:'Vegetables',kcal:40,protein:1.1,carbs:9.3,fat:0.1,fibre:1.7,ca:23,fe:0.2,vitC:7,vitA:0,zinc:0.2,potassium:146,b1:0.05,b2:0.03,b3:0.1},
+  {name:'Tomato',cat:'Vegetables',kcal:18,protein:0.9,carbs:3.9,fat:0.2,fibre:1.2,ca:10,fe:0.3,vitC:23,vitA:42,zinc:0.2,potassium:237,b1:0.04,b2:0.02,b3:0.6},
+  {name:'Garlic',cat:'Vegetables',kcal:149,protein:6.4,carbs:33.1,fat:0.5,fibre:2.1,ca:181,fe:1.7,vitC:31,vitA:0,zinc:1.2,potassium:401,b1:0.20,b2:0.11,b3:0.7},
+  {name:'Ginger',cat:'Vegetables',kcal:80,protein:1.8,carbs:17.8,fat:0.8,fibre:2.0,ca:16,fe:0.6,vitC:5,vitA:0,zinc:0.3,potassium:415,b1:0.03,b2:0.03,b3:0.8},
+  {name:'Green Chilli',cat:'Vegetables',kcal:40,protein:2.0,carbs:9.5,fat:0.2,fibre:1.5,ca:18,fe:1.0,vitC:242,vitA:59,zinc:0.3,potassium:340,b1:0.09,b2:0.09,b3:0.9},
+  {name:'Spinach (palak)',cat:'Vegetables',kcal:23,protein:2.9,carbs:3.6,fat:0.4,fibre:2.2,ca:99,fe:2.7,vitC:28,vitA:469,zinc:0.5,potassium:558,b1:0.08,b2:0.19,b3:0.7},
+  {name:'Potato',cat:'Vegetables',kcal:77,protein:2.0,carbs:17.5,fat:0.1,fibre:2.2,ca:12,fe:0.8,vitC:20,vitA:2,zinc:0.3,potassium:425,b1:0.08,b2:0.03,b3:1.1},
+  {name:'Cauliflower',cat:'Vegetables',kcal:25,protein:2.0,carbs:5.0,fat:0.3,fibre:2.0,ca:22,fe:0.4,vitC:46,vitA:0,zinc:0.3,potassium:303,b1:0.05,b2:0.04,b3:0.5},
+  {name:'Carrot',cat:'Vegetables',kcal:41,protein:0.9,carbs:9.6,fat:0.2,fibre:2.8,ca:33,fe:0.3,vitC:6,vitA:835,zinc:0.2,potassium:320,b1:0.07,b2:0.05,b3:0.7},
+  {name:'Capsicum (bell pepper)',cat:'Vegetables',kcal:31,protein:1.0,carbs:6.0,fat:0.3,fibre:2.1,ca:7,fe:0.4,vitC:128,vitA:18,zinc:0.3,potassium:211,b1:0.06,b2:0.06,b3:1.0},
+  {name:'Peas (fresh)',cat:'Vegetables',kcal:81,protein:5.4,carbs:14.5,fat:0.4,fibre:5.1,ca:25,fe:1.5,vitC:40,vitA:38,zinc:1.2,potassium:244,b1:0.27,b2:0.13,b3:2.1},
+  {name:'Brinjal (eggplant)',cat:'Vegetables',kcal:25,protein:1.0,carbs:5.7,fat:0.2,fibre:3.4,ca:9,fe:0.2,vitC:2,vitA:1,zinc:0.2,potassium:229,b1:0.04,b2:0.04,b3:0.6},
+  {name:'Bhindi (okra)',cat:'Vegetables',kcal:33,protein:2.0,carbs:7.5,fat:0.2,fibre:3.2,ca:77,fe:0.6,vitC:21,vitA:36,zinc:0.6,potassium:299,b1:0.20,b2:0.06,b3:1.0},
+  {name:'Bottle Gourd (lauki)',cat:'Vegetables',kcal:15,protein:0.6,carbs:3.4,fat:0.1,fibre:0.5,ca:26,fe:0.7,vitC:10,vitA:5,zinc:0.7,potassium:150,b1:0.04,b2:0.02,b3:0.3},
+  {name:'Bitter Gourd (karela)',cat:'Vegetables',kcal:17,protein:1.0,carbs:3.7,fat:0.2,fibre:2.8,ca:20,fe:0.4,vitC:84,vitA:6,zinc:0.8,potassium:296,b1:0.04,b2:0.03,b3:0.4},
+  {name:'Cabbage',cat:'Vegetables',kcal:25,protein:1.3,carbs:5.8,fat:0.1,fibre:2.5,ca:40,fe:0.5,vitC:36,vitA:5,zinc:0.2,potassium:170,b1:0.06,b2:0.04,b3:0.2},
+  {name:'Mushroom',cat:'Vegetables',kcal:22,protein:3.1,carbs:3.3,fat:0.3,fibre:1.0,ca:3,fe:0.5,vitC:2,vitA:0,zinc:0.5,potassium:318,b1:0.08,b2:0.30,b3:3.6},
+  {name:'Corn (fresh)',cat:'Vegetables',kcal:86,protein:3.3,carbs:18.7,fat:1.4,fibre:2.0,ca:2,fe:0.5,vitC:7,vitA:10,zinc:0.5,potassium:270,b1:0.20,b2:0.06,b3:1.8},
+  {name:'Drumstick (moringa)',cat:'Vegetables',kcal:37,protein:2.1,carbs:8.5,fat:0.2,fibre:3.2,ca:30,fe:0.4,vitC:141,vitA:4,zinc:0.4,potassium:461,b1:0.06,b2:0.07,b3:0.8},
+  {name:'Beetroot',cat:'Vegetables',kcal:43,protein:1.6,carbs:9.6,fat:0.2,fibre:2.8,ca:16,fe:0.8,vitC:5,vitA:2,zinc:0.4,potassium:325,b1:0.03,b2:0.04,b3:0.3},
+  {name:'Sweet Potato',cat:'Vegetables',kcal:86,protein:1.6,carbs:20.1,fat:0.1,fibre:3.0,ca:30,fe:0.6,vitC:20,vitA:961,zinc:0.3,potassium:337,b1:0.08,b2:0.06,b3:0.6},
+  {name:'Radish (mooli)',cat:'Vegetables',kcal:16,protein:0.7,carbs:3.4,fat:0.1,fibre:1.6,ca:25,fe:0.3,vitC:15,vitA:0,zinc:0.3,potassium:233,b1:0.01,b2:0.04,b3:0.3},
+  {name:'Coriander leaves',cat:'Vegetables',kcal:23,protein:2.1,carbs:3.7,fat:0.5,fibre:2.8,ca:67,fe:1.8,vitC:27,vitA:337,zinc:0.5,potassium:521,b1:0.07,b2:0.16,b3:1.1},
+  {name:'Curry leaves',cat:'Vegetables',kcal:108,protein:6.1,carbs:18.7,fat:1.0,fibre:6.4,ca:830,fe:0.9,vitC:4,vitA:0,zinc:0.2,potassium:0,b1:0.08,b2:0.21,b3:2.3},
+  {name:'Mint leaves (pudina)',cat:'Vegetables',kcal:70,protein:3.7,carbs:14.9,fat:0.9,fibre:8.0,ca:243,fe:5.1,vitC:32,vitA:212,zinc:1.1,potassium:569,b1:0.08,b2:0.17,b3:1.7},
+
+  // DAIRY
+  {name:'Milk (full fat)',cat:'Dairy',kcal:61,protein:3.2,carbs:4.8,fat:3.3,fibre:0,ca:120,fe:0.1,vitC:0,vitA:46,zinc:0.4,potassium:150,b1:0.04,b2:0.18,b3:0.1},
+  {name:'Curd / Yogurt',cat:'Dairy',kcal:98,protein:3.5,carbs:3.4,fat:4.3,fibre:0,ca:149,fe:0.1,vitC:0,vitA:27,zinc:0.6,potassium:155,b1:0.04,b2:0.19,b3:0.1},
+  {name:'Paneer',cat:'Dairy',kcal:265,protein:18.3,carbs:1.2,fat:20.8,fibre:0,ca:480,fe:0.2,vitC:0,vitA:192,zinc:1.1,potassium:90,b1:0.01,b2:0.24,b3:0.1},
+  {name:'Ghee',cat:'Dairy',kcal:900,protein:0,carbs:0,fat:99.5,fibre:0,ca:1,fe:0,vitC:0,vitA:600,zinc:0,potassium:5,b1:0,b2:0.02,b3:0},
+  {name:'Butter',cat:'Dairy',kcal:717,protein:0.9,carbs:0.1,fat:81.1,fibre:0,ca:24,fe:0,vitC:0,vitA:684,zinc:0.1,potassium:24,b1:0,b2:0.03,b3:0.04},
+  {name:'Cream (heavy)',cat:'Dairy',kcal:340,protein:2.1,carbs:2.8,fat:36.1,fibre:0,ca:69,fe:0.1,vitC:0,vitA:297,zinc:0.2,potassium:97,b1:0.02,b2:0.10,b3:0.1},
+  {name:'Khoya (mawa)',cat:'Dairy',kcal:421,protein:19.3,carbs:25.0,fat:28.5,fibre:0,ca:650,fe:0.5,vitC:0,vitA:240,zinc:1.5,potassium:380,b1:0.03,b2:0.37,b3:0.2},
+  {name:'Cheese (cheddar)',cat:'Dairy',kcal:403,protein:25.0,carbs:1.3,fat:33.1,fibre:0,ca:721,fe:0.3,vitC:0,vitA:265,zinc:3.1,potassium:98,b1:0.03,b2:0.43,b3:0.1},
+  {name:'Coconut milk',cat:'Dairy',kcal:230,protein:2.3,carbs:5.5,fat:23.8,fibre:2.2,ca:16,fe:3.3,vitC:3,vitA:0,zinc:0.7,potassium:263,b1:0.03,b2:0,b3:0.8},
+
+  // OILS & FATS
+  {name:'Coconut oil',cat:'Oils',kcal:892,protein:0,carbs:0,fat:99.1,fibre:0,ca:0,fe:0,vitC:0,vitA:0,zinc:0,potassium:0,b1:0,b2:0,b3:0},
+  {name:'Mustard oil',cat:'Oils',kcal:884,protein:0,carbs:0,fat:100,fibre:0,ca:0,fe:0,vitC:0,vitA:0,zinc:0,potassium:0,b1:0,b2:0,b3:0},
+  {name:'Sunflower oil',cat:'Oils',kcal:884,protein:0,carbs:0,fat:100,fibre:0,ca:0,fe:0,vitC:0,vitA:0,zinc:0,potassium:0,b1:0,b2:0,b3:0},
+  {name:'Olive oil',cat:'Oils',kcal:884,protein:0,carbs:0,fat:100,fibre:0,ca:0,fe:0.1,vitC:0,vitA:0,zinc:0,potassium:0,b1:0,b2:0,b3:0},
+  {name:'Groundnut oil',cat:'Oils',kcal:884,protein:0,carbs:0,fat:100,fibre:0,ca:0,fe:0,vitC:0,vitA:0,zinc:0,potassium:0,b1:0,b2:0,b3:0},
+
+  // SPICES & CONDIMENTS
+  {name:'Turmeric (haldi)',cat:'Spices',kcal:354,protein:7.8,carbs:64.9,fat:9.9,fibre:21.1,ca:183,fe:41.4,vitC:26,vitA:0,zinc:4.4,potassium:2525,b1:0.15,b2:0.23,b3:5.1},
+  {name:'Cumin seeds (jeera)',cat:'Spices',kcal:375,protein:17.8,carbs:44.2,fat:22.3,fibre:10.5,ca:931,fe:66.4,vitC:7,vitA:64,zinc:4.8,potassium:1788,b1:0.63,b2:0.33,b3:4.6},
+  {name:'Coriander powder (dhaniya)',cat:'Spices',kcal:298,protein:12.4,carbs:54.9,fat:17.8,fibre:41.9,ca:709,fe:16.3,vitC:21,vitA:0,zinc:4.7,potassium:1267,b1:0.24,b2:0.29,b3:2.1},
+  {name:'Red chilli powder',cat:'Spices',kcal:282,protein:13.5,carbs:49.7,fat:14.3,fibre:34.5,ca:148,fe:34.1,vitC:76,vitA:2081,zinc:2.5,potassium:2014,b1:0.33,b2:0.92,b3:8.7},
+  {name:'Garam masala',cat:'Spices',kcal:379,protein:13.0,carbs:49.9,fat:15.3,fibre:16.8,ca:690,fe:29.6,vitC:21,vitA:0,zinc:3.5,potassium:1540,b1:0.18,b2:0.27,b3:4.0},
+  {name:'Salt (sodium chloride)',cat:'Spices',kcal:0,protein:0,carbs:0,fat:0,fibre:0,ca:24,fe:0.3,vitC:0,vitA:0,zinc:0.1,potassium:8,b1:0,b2:0,b3:0},
+  {name:'Sugar',cat:'Spices',kcal:400,protein:0,carbs:99.8,fat:0,fibre:0,ca:1,fe:0.1,vitC:0,vitA:0,zinc:0,potassium:2,b1:0,b2:0,b3:0},
+  {name:'Jaggery (gur)',cat:'Spices',kcal:383,protein:0.4,carbs:98.0,fat:0.1,fibre:0,ca:80,fe:11.4,vitC:5,vitA:0,zinc:0.3,potassium:1056,b1:0.01,b2:0.06,b3:0.7},
+  {name:'Tamarind paste',cat:'Spices',kcal:239,protein:2.8,carbs:62.5,fat:0.6,fibre:5.1,ca:74,fe:2.8,vitC:4,vitA:2,zinc:0.1,potassium:628,b1:0.43,b2:0.15,b3:1.9},
+  {name:'Tomato puree',cat:'Spices',kcal:38,protein:1.7,carbs:8.7,fat:0.3,fibre:1.8,ca:19,fe:1.1,vitC:21,vitA:47,zinc:0.4,potassium:439,b1:0.08,b2:0.06,b3:1.6},
+
+  // EGGS & MEAT
+  {name:'Egg (whole)',cat:'Protein',kcal:143,protein:12.6,carbs:0.7,fat:9.5,fibre:0,ca:50,fe:1.8,vitC:0,vitA:149,zinc:1.1,potassium:126,b1:0.07,b2:0.45,b3:0.1,pieceG:50,pieceLabel:'1 egg (50g)'},
+  {name:'Egg White',cat:'Protein',kcal:52,protein:10.9,carbs:0.7,fat:0.2,fibre:0,ca:7,fe:0.1,vitC:0,vitA:0,zinc:0,potassium:163,b1:0.01,b2:0.43,b3:0.1,pieceG:30,pieceLabel:'1 white (30g)'},
+  {name:'Egg Yolk',cat:'Protein',kcal:322,protein:15.9,carbs:3.6,fat:26.5,fibre:0,ca:129,fe:2.7,vitC:0,vitA:381,zinc:2.3,potassium:109,b1:0.18,b2:0.53,b3:0.1,pieceG:20,pieceLabel:'1 yolk (20g)'},
+  {name:'Chicken Breast (raw)',cat:'Protein',kcal:120,protein:22.5,carbs:0,fat:2.6,fibre:0,ca:11,fe:0.7,vitC:0,vitA:6,zinc:0.9,potassium:220,b1:0.06,b2:0.12,b3:11.0},
+  {name:'Chicken Thigh (raw)',cat:'Protein',kcal:177,protein:17.4,carbs:0,fat:11.8,fibre:0,ca:11,fe:1.0,vitC:0,vitA:14,zinc:1.7,potassium:214,b1:0.08,b2:0.18,b3:5.5},
+  {name:'Mutton (raw)',cat:'Protein',kcal:194,protein:18.5,carbs:0,fat:13.3,fibre:0,ca:13,fe:2.2,vitC:0,vitA:0,zinc:3.6,potassium:261,b1:0.14,b2:0.20,b3:4.6},
+  {name:'Fish (rohu, raw)',cat:'Protein',kcal:97,protein:16.6,carbs:0,fat:3.4,fibre:0,ca:650,fe:1.0,vitC:0,vitA:10,zinc:0.9,potassium:320,b1:0.03,b2:0.07,b3:3.6},
+  {name:'Prawn (raw)',cat:'Protein',kcal:106,protein:20.3,carbs:0.9,fat:1.7,fibre:0,ca:52,fe:0.3,vitC:0,vitA:0,zinc:1.1,potassium:185,b1:0.03,b2:0.03,b3:2.6},
+  {name:'Tofu',cat:'Protein',kcal:76,protein:8.1,carbs:1.9,fat:4.2,fibre:0.3,ca:350,fe:5.4,vitC:0,vitA:0,zinc:0.8,potassium:121,b1:0.07,b2:0.03,b3:0.2},
+
+  // NUTS & SEEDS
+  {name:'Almonds',cat:'Nuts',kcal:579,protein:21.2,carbs:21.6,fat:49.9,fibre:12.5,ca:264,fe:3.7,vitC:0,vitA:0,zinc:3.1,potassium:733,b1:0.21,b2:1.01,b3:3.6},
+  {name:'Cashew nuts',cat:'Nuts',kcal:553,protein:18.2,carbs:30.2,fat:43.8,fibre:3.3,ca:37,fe:6.7,vitC:0,vitA:0,zinc:5.8,potassium:660,b1:0.42,b2:0.06,b3:1.1},
+  {name:'Peanuts (groundnuts)',cat:'Nuts',kcal:567,protein:25.8,carbs:16.1,fat:49.2,fibre:8.5,ca:54,fe:1.6,vitC:0,vitA:0,zinc:3.3,potassium:705,b1:0.15,b2:0.09,b3:12.9},
+  {name:'Sesame seeds (til)',cat:'Nuts',kcal:573,protein:17.7,carbs:23.4,fat:49.7,fibre:11.8,ca:975,fe:14.6,vitC:0,vitA:0,zinc:7.8,potassium:468,b1:0.79,b2:0.25,b3:4.5},
+  {name:'Flax seeds (alsi)',cat:'Nuts',kcal:534,protein:18.3,carbs:28.9,fat:42.2,fibre:27.3,ca:255,fe:5.7,vitC:0,vitA:0,zinc:4.3,potassium:813,b1:1.64,b2:0.16,b3:3.1},
+  {name:'Sunflower seeds',cat:'Nuts',kcal:584,protein:20.8,carbs:20.0,fat:51.5,fibre:8.6,ca:78,fe:5.3,vitC:1,vitA:0,zinc:5.0,potassium:645,b1:1.48,b2:0.36,b3:4.1},
+  {name:'Pumpkin seeds',cat:'Nuts',kcal:559,protein:30.2,carbs:10.7,fat:49.1,fibre:6.0,ca:46,fe:8.8,vitC:2,vitA:0,zinc:7.8,potassium:809,b1:0.27,b2:0.15,b3:4.4},
+  {name:'Coconut (grated, fresh)',cat:'Nuts',kcal:354,protein:3.3,carbs:15.2,fat:33.5,fibre:9.0,ca:14,fe:2.4,vitC:3,vitA:0,zinc:1.1,potassium:356,b1:0.07,b2:0.02,b3:0.5},
+  {name:'Walnuts',cat:'Nuts',kcal:654,protein:15.2,carbs:13.7,fat:65.2,fibre:6.7,ca:98,fe:2.9,vitC:1,vitA:0,zinc:3.1,potassium:441,b1:0.34,b2:0.15,b3:1.1},
+
+  // FRUITS (for cooking)
+  {name:'Lemon juice',cat:'Fruits',kcal:22,protein:0.4,carbs:6.9,fat:0.2,fibre:0.3,ca:6,fe:0.1,vitC:39,vitA:0,zinc:0.1,potassium:103,b1:0.04,b2:0.02,b3:0.1},
+  {name:'Banana',cat:'Fruits',kcal:89,protein:1.1,carbs:22.8,fat:0.3,fibre:2.6,ca:5,fe:0.3,vitC:8,vitA:3,zinc:0.2,potassium:358,b1:0.03,b2:0.07,b3:0.7},
+  {name:'Mango (pulp)',cat:'Fruits',kcal:60,protein:0.8,carbs:15.0,fat:0.4,fibre:1.6,ca:14,fe:0.2,vitC:28,vitA:54,zinc:0.1,potassium:168,b1:0.03,b2:0.04,b3:0.7},
+  {name:'Tamarind (raw)',cat:'Fruits',kcal:239,protein:2.8,carbs:62.5,fat:0.6,fibre:5.1,ca:74,fe:2.8,vitC:4,vitA:2,zinc:0.1,potassium:628,b1:0.43,b2:0.15,b3:1.9},
+  {name:'Amla (Indian gooseberry)',cat:'Fruits',kcal:44,protein:0.9,carbs:10.2,fat:0.6,fibre:3.4,ca:50,fe:1.2,vitC:600,vitA:9,zinc:0.1,potassium:198,b1:0.03,b2:0.01,b3:0.3},
+];
+
+// ─── RECIPE BUILDER ───────────────────────────────────────────────────────────
+let _recipeIngredients=[]; // [{food, grams}]
+let _recipeSearchQ='';
+
+const ALL_RECIPE_FOODS=[...INGREDIENTS_DB]; // will also include FOOD_DB items
+
+function openRecipeBuilder(){
+  _recipeIngredients=[];
+  _recipeSearchQ='';
+  document.getElementById('recipe-name').value='';
+  document.getElementById('recipe-search').value='';
+  document.getElementById('recipe-modal').style.display='flex';
+  document.body.style.overflow='hidden';
+  filterRecipeSearch();
+  renderRecipeIngredients();
+  // Set meal based on time
+  const h=new Date().getHours();
+  const meal=h<11?'breakfast':h<15?'lunch':h<19?'dinner':'snack';
+  document.getElementById('recipe-meal').value=meal;
+}
+
+function closeRecipeBuilder(){
+  document.getElementById('recipe-modal').style.display='none';
+  document.body.style.overflow='';
+}
+
+function filterRecipeSearch(){
+  _recipeSearchQ=document.getElementById('recipe-search').value.toLowerCase().trim();
+  const results=document.getElementById('recipe-search-results');
+  if(!_recipeSearchQ){results.innerHTML='<div style="padding:10px 16px;font-size:12px;color:var(--text3)">Type to search ingredients…</div>';return;}
+
+  const allFoods=[...INGREDIENTS_DB,...FOOD_DB.filter(f=>f.cat!=='Custom')];
+  const matches=allFoods.filter(f=>f.name.toLowerCase().includes(_recipeSearchQ)).slice(0,12);
+
+  if(!matches.length){results.innerHTML='<div style="padding:10px 16px;font-size:12px;color:var(--text3)">No match — add as custom food first</div>';return;}
+
+  results.innerHTML=matches.map((f,i)=>{
+    return '<div style="display:flex;align-items:center;justify-content:space-between;padding:8px 16px;border-bottom:1px solid var(--border);cursor:pointer" onclick="addRecipeIngredient(\''+f.name.replace(/'/g,"\\'")+'\')" >'+
+      '<div>'+
+        '<div style="font-size:13px;font-weight:700;color:var(--text)">'+f.name+'</div>'+
+        '<div style="font-size:11px;color:var(--text3)">'+f.kcal+' kcal · P:'+f.protein+'g · C:'+f.carbs+'g · F:'+f.fat+'g per 100g</div>'+
+      '</div>'+
+      '<span style="font-size:20px;color:var(--red);padding:0 4px">+</span>'+
+    '</div>';
+  }).join('');
+}
+
+function addRecipeIngredient(name){
+  const food=[...INGREDIENTS_DB,...FOOD_DB].find(f=>f.name===name);
+  if(!food) return;
+  // Default amount based on type
+  let defaultG=100;
+  if(['Oils','Spices'].includes(food.cat)) defaultG=10;
+  else if(food.cat==='Dairy'&&food.name.includes('Milk')) defaultG=200;
+  else if(food.pieceG) defaultG=food.pieceG;
+
+  _recipeIngredients.push({food, grams:defaultG, unit:'g'});
+  document.getElementById('recipe-search').value='';
+  _recipeSearchQ='';
+  filterRecipeSearch();
+  renderRecipeIngredients();
+}
+
+function removeRecipeIngredient(idx){
+  _recipeIngredients.splice(idx,1);
+  renderRecipeIngredients();
+}
+
+function updateRecipeGrams(idx, val, unit){
+  const mult={g:1,ml:1,tsp:5,tbsp:15,cup:240,piece:1};
+  let grams=parseFloat(val)||0;
+  if(unit==='piece' && _recipeIngredients[idx].food.pieceG){
+    grams=grams*_recipeIngredients[idx].food.pieceG;
+  } else {
+    grams=grams*(mult[unit]||1);
+  }
+  _recipeIngredients[idx].grams=grams;
+  _recipeIngredients[idx].unit=unit;
+  _recipeIngredients[idx].amount=parseFloat(val)||0;
+  renderRecipeTotals();
+}
+
+function renderRecipeIngredients(){
+  const list=document.getElementById('recipe-ingredients-list');
+  if(!_recipeIngredients.length){
+    list.innerHTML='<div style="text-align:center;padding:16px;color:var(--text3);font-size:13px">Search above to add ingredients</div>';
+    document.getElementById('recipe-totals').style.display='none';
+    return;
+  }
+  list.innerHTML=_recipeIngredients.map((item,idx)=>{
+    const hasPiece=!!item.food.pieceG;
+    const unitOpts=['g','ml','tsp','tbsp','cup',...(hasPiece?['piece']:[])];
+    const defUnit=item.unit||'g';
+    const defAmt=item.amount||(item.grams/(({g:1,ml:1,tsp:5,tbsp:15,cup:240})[defUnit]||1));
+    return '<div style="display:flex;align-items:center;gap:6px;padding:7px 0;border-bottom:1px solid var(--border)">'+
+      '<div style="flex:1;min-width:0">'+
+        '<div style="font-size:13px;font-weight:700;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">'+item.food.name+'</div>'+
+        '<div style="font-size:10px;color:var(--text3)">'+Math.round(item.food.kcal*item.grams/100)+' kcal · '+
+          (item.food.protein*item.grams/100).toFixed(1)+'g P</div>'+
+      '</div>'+
+      '<input type="number" value="'+(item.amount||Math.round(item.grams))+'" min="0" inputmode="decimal" '+
+        'style="width:60px;padding:5px;border:1px solid var(--border);border-radius:6px;background:var(--surface);color:var(--text);font-size:13px;text-align:center" '+
+        'onchange="updateRecipeGrams('+idx+',this.value,document.getElementById(\'ru'+idx+'\').value)">'+
+      '<select id="ru'+idx+'" style="padding:5px;border:1px solid var(--border);border-radius:6px;background:var(--surface);color:var(--text);font-size:12px" '+
+        'onchange="updateRecipeGrams('+idx+',this.previousElementSibling.value,this.value)">'+
+        unitOpts.map(u=>'<option value="'+u+'"'+(u===defUnit?' selected':'')+'>'+u+'</option>').join('')+
+      '</select>'+
+      '<button onclick="removeRecipeIngredient('+idx+')" style="background:none;border:none;color:var(--text3);font-size:18px;cursor:pointer;padding:2px 4px;flex-shrink:0">×</button>'+
+    '</div>';
+  }).join('');
+  renderRecipeTotals();
+}
+
+function renderRecipeTotals(){
+  const totals={kcal:0,protein:0,carbs:0,fat:0,fibre:0,ca:0,fe:0,vitC:0};
+  _recipeIngredients.forEach(item=>{
+    const s=item.grams/100;
+    totals.kcal+=item.food.kcal*s;
+    totals.protein+=item.food.protein*s;
+    totals.carbs+=item.food.carbs*s;
+    totals.fat+=item.food.fat*s;
+    totals.fibre+=item.food.fibre*s;
+    totals.ca+=item.food.ca*s;
+    totals.fe+=item.food.fe*s;
+    totals.vitC+=item.food.vitC*s;
+  });
+  const tot=document.getElementById('recipe-totals');
+  if(!tot) return;
+  tot.style.display='block';
+  tot.innerHTML='<div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.8px;color:var(--text3);margin-bottom:6px">Recipe Total</div>'+
+    '<div style="display:grid;grid-template-columns:repeat(4,1fr);gap:6px">'+
+    [
+      {label:'Calories',val:Math.round(totals.kcal),unit:'kcal',color:'var(--red)'},
+      {label:'Protein',val:totals.protein.toFixed(1),unit:'g',color:'#185FA5'},
+      {label:'Carbs',val:totals.carbs.toFixed(1),unit:'g',color:'#f97316'},
+      {label:'Fat',val:totals.fat.toFixed(1),unit:'g',color:'#eab308'},
+      {label:'Fibre',val:totals.fibre.toFixed(1),unit:'g',color:'#22c55e'},
+      {label:'Calcium',val:Math.round(totals.ca),unit:'mg',color:'#7c3aed'},
+      {label:'Iron',val:totals.fe.toFixed(1),unit:'mg',color:'#dc2626'},
+      {label:'Vit C',val:Math.round(totals.vitC),unit:'mg',color:'#d97706'},
+    ].map(t=>
+      '<div style="text-align:center;background:var(--surface);border-radius:8px;padding:6px 2px">'+
+        '<div style="font-size:9px;font-weight:700;text-transform:uppercase;color:var(--text3)">'+t.label+'</div>'+
+        '<div style="font-family:var(--font-cond);font-weight:900;font-size:15px;color:'+t.color+'">'+t.val+'</div>'+
+        '<div style="font-size:9px;color:var(--text3)">'+t.unit+'</div>'+
+      '</div>'
+    ).join('')+'</div>';
+}
+
+function clearRecipe(){
+  _recipeIngredients=[];
+  document.getElementById('recipe-name').value='';
+  document.getElementById('recipe-search').value='';
+  filterRecipeSearch();
+  renderRecipeIngredients();
+}
+
+function logRecipe(){
+  if(!_recipeIngredients.length){toast('Add at least one ingredient');return;}
+  const name=document.getElementById('recipe-name').value.trim()||'My Recipe';
+  const meal=document.getElementById('recipe-meal').value;
+
+  // Compute total nutrition for all ingredients
+  const totals={kcal:0,protein:0,carbs:0,fat:0,fibre:0,ca:0,fe:0,vitC:0,vitA:0,zinc:0,potassium:0,b1:0,b2:0,b3:0};
+  let totalGrams=0;
+  _recipeIngredients.forEach(item=>{
+    const s=item.grams/100;
+    Object.keys(totals).forEach(k=>{totals[k]+=(item.food[k]||0)*s;});
+    totalGrams+=item.grams;
+  });
+
+  // Create a "food" entry scaled per 100g of the whole recipe
+  // Then log it as totalGrams grams of that food
+  const recipeFood={
+    name,
+    cat:'Recipe',
+    kcal:Math.round(totals.kcal/totalGrams*100),
+    protein:parseFloat((totals.protein/totalGrams*100).toFixed(1)),
+    carbs:parseFloat((totals.carbs/totalGrams*100).toFixed(1)),
+    fat:parseFloat((totals.fat/totalGrams*100).toFixed(1)),
+    fibre:parseFloat((totals.fibre/totalGrams*100).toFixed(1)),
+    ca:Math.round(totals.ca/totalGrams*100),
+    fe:parseFloat((totals.fe/totalGrams*100).toFixed(2)),
+    vitC:Math.round(totals.vitC/totalGrams*100),
+    vitA:Math.round(totals.vitA/totalGrams*100),
+    zinc:parseFloat((totals.zinc/totalGrams*100).toFixed(2)),
+    potassium:Math.round(totals.potassium/totalGrams*100),
+    b1:parseFloat((totals.b1/totalGrams*100).toFixed(3)),
+    b2:parseFloat((totals.b2/totalGrams*100).toFixed(3)),
+    b3:parseFloat((totals.b3/totalGrams*100).toFixed(3)),
+    _custom:true,_recipe:true,
+    _ingredients:_recipeIngredients.map(i=>i.food.name+' '+Math.round(i.grams)+'g').join(', ')
+  };
+
+  // Save to custom foods for future use
+  if(!state.customFoods) state.customFoods=[];
+  if(!FOOD_DB.find(f=>f.name===name)){
+    FOOD_DB.push(recipeFood);
+    state.customFoods.push(recipeFood);
+  }
+
+  // Log it
+  const log=getFoodLog();
+  log.meals[meal].push({...recipeFood, grams:totalGrams, unit:'g', amount:totalGrams});
+  state.foodLog[foodDate]=log;
+  saveState();
+  closeRecipeBuilder();
+  renderFoodPage();
+  if(homeMode==='food') renderHomeFoodPanel();
+  toast(name+' logged — '+Math.round(totals.kcal)+' kcal ✓');
+}
+
+// ─── FOOD DATABASE (per 100g) ─────────────────────────────────────────────────
 const FOOD_DB = [
   // CEREALS & GRAINS
   {name:'Rice (cooked)',cat:'Cereals',kcal:130,protein:2.7,carbs:28.2,fat:0.3,fibre:0.2,ca:10,fe:0.7,vitC:0,vitA:0,zinc:0.5,potassium:35,b1:0.02,b2:0.01,b3:0.4},
@@ -4175,17 +4600,32 @@ const FOOD_DB = [
 
 // Daily RDA targets — protein is dynamic (1.5g × bodyweight kg)
 function getRDA(){
-  const bw=state.calProfile.wt||75;
+  const p=state.calProfile||{};
+  const bw=p.wt||75;
+  const age=p.age||28;
+  const gender=p.gender||'male';
+  const fit=p.fit||'intermediate';
+  // Mifflin-St Jeor BMR
+  const bmr=gender==='male'
+    ? 10*bw + 6.25*(p.ht||170) - 5*age + 5
+    : 10*bw + 6.25*(p.ht||165) - 5*age - 161;
+  const actMult={beginner:1.375, intermediate:1.55, advanced:1.725}[fit]||1.55;
+  const kcal=Math.round(bmr*actMult);
+  const protein=Math.round(bw*1.5);            // 1.5g/kg
+  const fat=Math.round(kcal*0.25/9);           // 25% of kcal from fat
+  const carbs=Math.round((kcal-protein*4-fat*9)/4); // remaining from carbs
+  const waterMl=p.waterGoal||(Math.round(bw*35/100)*100); // 35ml/kg, rounded to 100ml
   return {
-    kcal:2200,
-    protein:Math.round(bw*1.5),  // 1.5g per kg bodyweight
-    carbs:300,
-    fat:65,
-    fibre:30,
-    ca:1000,fe:17,vitC:65,vitA:900,zinc:12,potassium:3500,b1:1.4,b2:1.6,b3:18
+    kcal, protein, carbs, fat, fibre:30,
+    water:waterMl,
+    ca:gender==='female'?1200:1000,
+    fe:gender==='female'?21:17,
+    vitC:65, vitA:gender==='male'?900:700,
+    zinc:gender==='male'?12:9,
+    potassium:3500, b1:1.4, b2:1.6, b3:gender==='male'?18:14
   };
 }
-// Keep RDA as a getter so it always reflects current bodyweight
+// Keep RDA as a getter so it always reflects current profile
 const RDA=new Proxy({},{get:(_,k)=>getRDA()[k]});
 
 // Food log state
@@ -4243,16 +4683,22 @@ function renderFoodPage(){
 }
 
 function renderWater(log){
-  const glasses=Math.round((log.water||0)/250);
-  const target=8;
-  document.getElementById('water-display').textContent=`${(log.water/1000).toFixed(1)}L / ${target} glasses`;
-  const wrap=document.getElementById('water-glasses');
+  const rda=getRDA();
+  const goalMl=rda.water||2000;
+  const cupMl=250;
+  const totalCups=Math.round(goalMl/cupMl);
+  const filledCups=Math.min(totalCups,Math.round((log.water||0)/cupMl));
+  const pct=Math.min(100,Math.round((log.water||0)/goalMl*100));
+  const disp=document.getElementById('water-display');
+  if(disp) disp.innerHTML=`<span style="color:${pct>=100?'#22c55e':'#185FA5'}">${((log.water||0)/1000).toFixed(1)}L</span> <span style="color:var(--text3);font-size:14px">/ ${(goalMl/1000).toFixed(1)}L goal</span>`;
+  const wrap=document.getElementById('water-glasses'); if(!wrap) return;
   wrap.innerHTML='';
-  for(let i=0;i<target;i++){
+  for(let i=0;i<totalCups;i++){
     const g=document.createElement('div');
-    g.className='water-glass'+(i<glasses?' filled':'');
-    g.textContent=i<glasses?'💧':'○';
-    g.onclick=()=>{log.water=Math.max(0,(i+1)*250);if(i<glasses)log.water=i*250;saveState();renderFoodPage();};
+    g.className='water-glass'+(i<filledCups?' filled':'');
+    g.textContent=i<filledCups?'💧':'○';
+    g.title=(i+1)*cupMl+'ml';
+    g.onclick=()=>{log.water=Math.max(0,(i+1)*cupMl);if(i<filledCups)log.water=i*cupMl;saveState();renderFoodPage();};
     wrap.appendChild(g);
   }
 }
@@ -4261,27 +4707,37 @@ function addWater(ml){const log=getFoodLog();log.water=(log.water||0)+ml;saveSta
 function resetWater(){const log=getFoodLog();log.water=0;saveState();renderFoodPage();if(homeMode==='food')renderHomeFoodPanel();}
 
 function renderMacroBars(tot){
-  const bw=state.calProfile.wt||75;
-  const proteinTarget=Math.round(bw*1.5);
+  const rda=getRDA();
+  const log=getFoodLog();
+  const waterMl=log.water||0;
   const macros=[
-    {key:'kcal',  label:'Calories',unit:'kcal', color:'#E24B4A', target:getRDA().kcal},
-    {key:'protein',label:`Protein (target: ${proteinTarget}g)`,unit:'g',color:'#185FA5',target:proteinTarget},
-    {key:'carbs', label:'Carbs',   unit:'g',    color:'#f97316', target:getRDA().carbs},
-    {key:'fat',   label:'Fat',     unit:'g',    color:'#eab308', target:getRDA().fat},
-    {key:'fibre', label:'Fibre',   unit:'g',    color:'#22c55e', target:getRDA().fibre},
+    {key:'kcal',   label:'Calories', unit:'kcal',color:'#E24B4A', target:rda.kcal},
+    {key:'protein',label:'Protein',  unit:'g',   color:'#185FA5', target:rda.protein},
+    {key:'carbs',  label:'Carbs',    unit:'g',   color:'#f97316', target:rda.carbs},
+    {key:'fat',    label:'Fat',      unit:'g',   color:'#eab308', target:rda.fat},
+    {key:'fibre',  label:'Fibre',    unit:'g',   color:'#22c55e', target:rda.fibre},
   ];
-  document.getElementById('food-macro-bars').innerHTML=macros.map(m=>{
+  const macroHTML=macros.map(m=>{
     const val=m.key==='kcal'?Math.round(tot[m.key]||0):((tot[m.key]||0).toFixed(1));
     const pct=Math.min(100,Math.round((parseFloat(val)||0)/m.target*100));
     const over=parseFloat(val)>m.target;
-    return `<div class="macro-bar-row">
-      <div class="macro-bar-label">
-        <span style="font-size:12px">${m.label}</span>
-        <span style="color:${over?'#dc2626':m.color}">${val}${m.unit} <span style="color:var(--text3);font-weight:400">/ ${m.target}${m.unit}</span></span>
-      </div>
-      <div class="macro-bar-track"><div class="macro-bar-fill" style="width:${pct}%;background:${over?'#dc2626':m.color}"></div></div>
-    </div>`;
+    return '<div class="macro-bar-row">'+
+      '<div class="macro-bar-label"><span style="font-size:12px">'+m.label+'</span>'+
+      '<span style="color:'+(over?'#dc2626':m.color)+'">'+val+m.unit+
+      ' <span style="color:var(--text3);font-weight:400">/ '+m.target+m.unit+'</span></span></div>'+
+      '<div class="macro-bar-track"><div class="macro-bar-fill" style="width:'+pct+'%;background:'+(over?'#dc2626':m.color)+'"></div></div>'+
+    '</div>';
   }).join('');
+  // Water bar
+  const waterPct=Math.min(100,Math.round(waterMl/rda.water*100));
+  const waterColor=waterPct>=100?'#22c55e':'#185FA5';
+  const waterHTML='<div class="macro-bar-row">'+
+    '<div class="macro-bar-label"><span style="font-size:12px">💧 Water</span>'+
+    '<span style="color:'+waterColor+'">'+(waterMl/1000).toFixed(1)+'L'+
+    ' <span style="color:var(--text3);font-weight:400">/ '+(rda.water/1000).toFixed(1)+'L</span></span></div>'+
+    '<div class="macro-bar-track"><div class="macro-bar-fill" style="width:'+waterPct+'%;background:'+waterColor+'"></div></div>'+
+  '</div>';
+  document.getElementById('food-macro-bars').innerHTML=macroHTML+waterHTML;
 }
 
 function renderMicroBars(tot){

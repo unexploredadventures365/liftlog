@@ -226,7 +226,14 @@ select.inp{cursor:pointer}
 .heatmap-legend{font-size:11px;color:var(--text3);line-height:1.8}
 .heatmap-legend-item{display:flex;align-items:center;gap:6px}
 .heatmap-swatch{width:12px;height:12px;border-radius:3px}
-/* HOME MODE TOGGLE */
+/* STEPS */
+.step-goal-chip{padding:5px 12px;border-radius:16px;border:1px solid var(--border);font-size:12px;font-weight:700;cursor:pointer;color:var(--text2);background:var(--surface2);white-space:nowrap;transition:all .15s}
+.step-goal-chip.active{background:var(--red);border-color:var(--red);color:#fff}
+.step-bar-row{display:flex;align-items:center;gap:8px;margin-bottom:7px}
+.step-bar-day{font-size:11px;font-weight:700;color:var(--text3);width:28px;flex-shrink:0}
+.step-bar-track{flex:1;height:18px;background:var(--surface2);border-radius:9px;overflow:hidden;position:relative}
+.step-bar-fill{height:18px;border-radius:9px;background:linear-gradient(90deg,var(--red),#f97316);transition:width .5s}
+.step-bar-val{font-size:11px;font-weight:700;color:var(--text2);width:44px;text-align:right;flex-shrink:0}
 .home-mode-toggle{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:14px}
 .home-mode-btn{display:flex;flex-direction:column;align-items:center;gap:5px;padding:14px 8px;border-radius:var(--radius);border:2px solid var(--border);background:var(--surface);cursor:pointer;transition:all .2s;font-family:var(--font-body)}
 .home-mode-btn.active{border-color:var(--red);background:var(--red-bg)}
@@ -380,8 +387,8 @@ select.inp{cursor:pointer}
   <!-- WORKOUT PAGE -->
   <div class="page active" id="page-workout">
 
-    <!-- MODE TOGGLE — two big buttons at the very top -->
-    <div class="home-mode-toggle">
+    <!-- MODE TOGGLE — three buttons at the very top -->
+    <div class="home-mode-toggle" style="grid-template-columns:1fr 1fr 1fr">
       <button class="home-mode-btn active" id="home-btn-workout" onclick="setHomeMode('workout')">
         <span class="home-mode-icon">🏋️</span>
         <span class="home-mode-label">Workout</span>
@@ -389,6 +396,10 @@ select.inp{cursor:pointer}
       <button class="home-mode-btn" id="home-btn-food" onclick="setHomeMode('food')">
         <span class="home-mode-icon">🍱</span>
         <span class="home-mode-label">Food & Water</span>
+      </button>
+      <button class="home-mode-btn" id="home-btn-steps" onclick="setHomeMode('steps')">
+        <span class="home-mode-icon">👟</span>
+        <span class="home-mode-label">Steps</span>
       </button>
     </div>
 
@@ -470,6 +481,97 @@ select.inp{cursor:pointer}
       <!-- Meal log -->
       <div id="home-meal-log"></div>
     </div><!-- end home-food-panel -->
+
+    <!-- STEPS PANEL -->
+    <div id="home-steps-panel" style="display:none">
+
+      <!-- Daily step ring + count -->
+      <div class="card" style="padding:16px;margin-bottom:10px">
+        <div style="display:flex;align-items:center;gap:16px">
+          <!-- SVG ring -->
+          <div style="position:relative;flex-shrink:0;width:100px;height:100px">
+            <svg width="100" height="100" viewBox="0 0 100 100">
+              <circle cx="50" cy="50" r="42" fill="none" stroke="var(--surface2)" stroke-width="10"/>
+              <circle id="step-ring-arc" cx="50" cy="50" r="42" fill="none" stroke="var(--red)"
+                stroke-width="10" stroke-linecap="round"
+                stroke-dasharray="264" stroke-dashoffset="264"
+                transform="rotate(-90 50 50)" style="transition:stroke-dashoffset .6s"/>
+            </svg>
+            <div style="position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center">
+              <div id="step-ring-pct" style="font-family:var(--font-cond);font-weight:900;font-size:18px;color:var(--red)">0%</div>
+            </div>
+          </div>
+          <!-- Stats -->
+          <div style="flex:1">
+            <div id="step-count-display" style="font-family:var(--font-cond);font-weight:900;font-size:42px;color:var(--text);line-height:1">0</div>
+            <div style="font-size:13px;color:var(--text3);margin-bottom:6px">of <span id="step-goal-display">8,000</span> steps</div>
+            <div style="display:flex;gap:10px">
+              <div>
+                <div id="step-km-display" style="font-size:15px;font-weight:700;color:var(--text)">0.0</div>
+                <div style="font-size:10px;color:var(--text3);font-weight:600">km</div>
+              </div>
+              <div>
+                <div id="step-kcal-display" style="font-size:15px;font-weight:700;color:var(--red)">0</div>
+                <div style="font-size:10px;color:var(--text3);font-weight:600">kcal</div>
+              </div>
+              <div>
+                <div id="step-mins-display" style="font-size:15px;font-weight:700;color:var(--text)">0</div>
+                <div style="font-size:10px;color:var(--text3);font-weight:600">active min</div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Live counter + permission -->
+      <div class="card" style="padding:14px;margin-bottom:10px">
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px">
+          <div style="font-family:var(--font-cond);font-weight:700;font-size:15px;text-transform:uppercase">Live Counter</div>
+          <div id="step-sensor-status" style="font-size:11px;font-weight:700;padding:3px 8px;border-radius:10px;background:var(--surface2);color:var(--text3)">● Off</div>
+        </div>
+        <div style="font-size:12px;color:var(--text2);margin-bottom:10px;line-height:1.5" id="step-sensor-info">
+          Counts steps using your phone's accelerometer while the app is open.
+        </div>
+        <div style="display:flex;gap:8px">
+          <button class="btn-primary" style="flex:1" id="step-start-btn" onclick="startStepCounter()">▶ Start Counting</button>
+          <button class="btn-outline" onclick="stopStepCounter()">Stop</button>
+          <button class="btn-outline" onclick="resetTodaySteps()">Reset</button>
+        </div>
+      </div>
+
+      <!-- Manual sync from health app -->
+      <div class="card" style="padding:14px;margin-bottom:10px">
+        <div style="font-family:var(--font-cond);font-weight:700;font-size:15px;text-transform:uppercase;margin-bottom:4px">Sync from Health App</div>
+        <div style="font-size:12px;color:var(--text3);margin-bottom:10px;line-height:1.5">
+          Check your steps in <b>Google Fit</b> or <b>Apple Health</b> and enter the total here — replaces today's count with the accurate hardware value.
+        </div>
+        <div style="display:flex;gap:8px;align-items:center">
+          <input class="inp" id="step-manual-input" type="number" inputmode="numeric" placeholder="e.g. 7500" style="flex:1">
+          <button class="btn-primary" style="flex-shrink:0" onclick="syncManualSteps()">Sync ✓</button>
+        </div>
+        <div style="margin-top:10px;padding:10px;background:var(--surface2);border-radius:10px;font-size:11px;color:var(--text3);line-height:1.6">
+          <b style="color:var(--text2)">Android:</b> Open Google Fit → Today → Steps shown at top<br>
+          <b style="color:var(--text2)">iOS:</b> Open Apple Health → Summary → Steps
+        </div>
+      </div>
+
+      <!-- Step goal setting -->
+      <div class="card" style="padding:14px;margin-bottom:10px">
+        <div style="font-family:var(--font-cond);font-weight:700;font-size:15px;text-transform:uppercase;margin-bottom:8px">Daily Goal</div>
+        <div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:8px" id="step-goal-chips"></div>
+        <div style="display:flex;gap:8px;align-items:center">
+          <input class="inp" id="step-goal-input" type="number" inputmode="numeric" placeholder="Custom goal" style="flex:1">
+          <button class="btn-outline" onclick="setStepGoal(parseInt(document.getElementById('step-goal-input').value))">Set</button>
+        </div>
+      </div>
+
+      <!-- 7-day history -->
+      <div class="card" style="padding:14px">
+        <div style="font-family:var(--font-cond);font-weight:700;font-size:15px;text-transform:uppercase;margin-bottom:10px">Last 7 Days</div>
+        <div id="step-history-bars"></div>
+      </div>
+
+    </div><!-- end home-steps-panel -->
 
   </div>
 
@@ -970,7 +1072,9 @@ let state={
   exerciseDate:null,
   exerciseMemory:{},
   foodLog:{},
-  customFoods:[]
+  customFoods:[],
+  stepLog:{},
+  stepGoal:8000
 };
 let calYear=new Date().getFullYear(),calMonth=new Date().getMonth();
 let selectedDate=null; // null = today
@@ -990,7 +1094,9 @@ function saveState(){
       activeProgram:state.activeProgram,
       exerciseMemory:state.exerciseMemory||{},
       foodLog:state.foodLog||{},
-      customFoods:state.customFoods||[]
+      customFoods:state.customFoods||[],
+      stepLog:state.stepLog||{},
+      stepGoal:state.stepGoal||8000
     };
     localStorage.setItem(STORAGE_KEY,JSON.stringify(s));
     state.lastSaved=s.lastSaved;
@@ -1015,6 +1121,8 @@ function loadState(){
     if(s.activeProgram) state.activeProgram=s.activeProgram;
     if(s.exerciseMemory) state.exerciseMemory=s.exerciseMemory;
     if(s.foodLog) state.foodLog=s.foodLog;
+    if(s.stepLog) state.stepLog=s.stepLog;
+    if(s.stepGoal) state.stepGoal=s.stepGoal;
     if(s.customFoods&&s.customFoods.length){
       state.customFoods=s.customFoods;
       // Re-inject into FOOD_DB (avoid duplicates)
@@ -3614,15 +3722,213 @@ document.addEventListener('DOMContentLoaded',()=>{
   });
 });
 
-// ─── HOME MODE TOGGLE ────────────────────────────────────────────────────────
+// ─── STEP COUNTER ─────────────────────────────────────────────────────────────
+
+// Step data stored in state.stepLog: { 'YYYY-MM-DD': count }
+// Step goal stored in state.stepGoal
+const STEP_GOALS=[5000,8000,10000,12000,15000];
+const STEP_LENGTH_M=0.78; // avg stride length metres
+const STEP_KCAL_PER_STEP=0.04; // ~40 kcal per 1000 steps for 75kg person
+
+let _stepListening=false;
+let _stepMotionHandler=null;
+let _stepLastMag=0;
+let _stepPeak=false;
+let _stepThreshold=12;    // acceleration magnitude threshold m/s²
+let _stepCooldown=0;      // timestamp of last detected step (debounce)
+let _stepSessionCount=0;  // steps counted in current live session
+
+function getStepLog(){
+  if(!state.stepLog) state.stepLog={};
+  return state.stepLog;
+}
+function getTodaySteps(){
+  return getStepLog()[todayStr()]||0;
+}
+function setTodaySteps(n){
+  getStepLog()[todayStr()]=Math.max(0,n);
+  saveState();
+}
+function getStepGoal(){
+  return state.stepGoal||8000;
+}
+
+// ── Accelerometer step detection ─────────────────────────────────────────────
+function startStepCounter(){
+  if(_stepListening){toast('Already counting!');return;}
+
+  // iOS requires explicit permission request
+  if(typeof DeviceMotionEvent!=='undefined' && typeof DeviceMotionEvent.requestPermission==='function'){
+    DeviceMotionEvent.requestPermission().then(result=>{
+      if(result==='granted'){
+        _attachStepListener();
+      } else {
+        toast('Motion permission denied — use manual sync');
+        document.getElementById('step-sensor-info').textContent='Permission denied. Use the manual sync option below to enter steps from Google Fit or Apple Health.';
+      }
+    }).catch(()=>{
+      toast('Could not request motion permission');
+    });
+  } else if(typeof DeviceMotionEvent!=='undefined'){
+    _attachStepListener();
+  } else {
+    document.getElementById('step-sensor-status').textContent='● Not supported';
+    document.getElementById('step-sensor-info').textContent='Your browser does not support motion sensors. Use manual sync below.';
+    toast('Motion sensor not supported — use manual sync');
+  }
+}
+
+function _attachStepListener(){
+  _stepListening=true;
+  _stepSessionCount=0;
+  document.getElementById('step-sensor-status').textContent='● Counting';
+  document.getElementById('step-sensor-status').style.background='rgba(226,75,74,0.15)';
+  document.getElementById('step-sensor-status').style.color='var(--red)';
+  document.getElementById('step-sensor-info').textContent='Counting steps… keep your phone in your pocket or hand while walking.';
+  document.getElementById('step-start-btn').textContent='⏸ Counting…';
+  document.getElementById('step-start-btn').style.opacity='0.6';
+
+  _stepMotionHandler=function(event){
+    const acc=event.accelerationIncludingGravity||event.acceleration;
+    if(!acc) return;
+    const x=acc.x||0, y=acc.y||0, z=acc.z||0;
+    const mag=Math.sqrt(x*x+y*y+z*z);
+
+    // Peak detection: look for rising then falling magnitude above threshold
+    const now=Date.now();
+    if(mag>_stepThreshold && !_stepPeak && (now-_stepCooldown)>300){
+      _stepPeak=true;
+    } else if(mag<_stepThreshold-2 && _stepPeak){
+      _stepPeak=false;
+      _stepCooldown=now;
+      _stepSessionCount++;
+      // Update today's count
+      const current=getTodaySteps();
+      setTodaySteps(current+1);
+      renderStepsPanel();
+    }
+    _stepLastMag=mag;
+  };
+  window.addEventListener('devicemotion',_stepMotionHandler);
+  toast('Step counting started!');
+}
+
+function stopStepCounter(){
+  if(!_stepListening) return;
+  _stepListening=false;
+  if(_stepMotionHandler){
+    window.removeEventListener('devicemotion',_stepMotionHandler);
+    _stepMotionHandler=null;
+  }
+  document.getElementById('step-sensor-status').textContent='● Stopped';
+  document.getElementById('step-sensor-status').style.background='var(--surface2)';
+  document.getElementById('step-sensor-status').style.color='var(--text3)';
+  document.getElementById('step-sensor-info').textContent='Stopped. '+_stepSessionCount+' steps counted this session.';
+  document.getElementById('step-start-btn').textContent='▶ Start Counting';
+  document.getElementById('step-start-btn').style.opacity='1';
+  toast('Stopped. '+_stepSessionCount+' steps this session.');
+}
+
+function resetTodaySteps(){
+  if(!confirm('Reset today\'s step count to 0?')) return;
+  setTodaySteps(0);
+  _stepSessionCount=0;
+  renderStepsPanel();
+  toast('Step count reset');
+}
+
+function syncManualSteps(){
+  const val=parseInt(document.getElementById('step-manual-input').value)||0;
+  if(!val||val<0){toast('Enter a valid step count');return;}
+  setTodaySteps(val);
+  document.getElementById('step-manual-input').value='';
+  renderStepsPanel();
+  toast('Synced '+val.toLocaleString()+' steps from health app ✓');
+}
+
+function setStepGoal(n){
+  if(!n||n<100){toast('Enter a valid goal (e.g. 8000)');return;}
+  state.stepGoal=n;
+  saveState();
+  renderStepsPanel();
+  toast('Goal set to '+n.toLocaleString()+' steps');
+}
+
+// ── Render ────────────────────────────────────────────────────────────────────
+function renderStepsPanel(){
+  const steps=getTodaySteps();
+  const goal=getStepGoal();
+  const pct=Math.min(100,Math.round(steps/goal*100));
+  const km=(steps*STEP_LENGTH_M/1000).toFixed(2);
+  const kcal=Math.round(steps*STEP_KCAL_PER_STEP);
+  const activeMins=Math.round(steps/100); // rough: ~100 steps/min walking
+
+  // Main display
+  const countEl=document.getElementById('step-count-display');
+  const goalEl=document.getElementById('step-goal-display');
+  const kmEl=document.getElementById('step-km-display');
+  const kcalEl=document.getElementById('step-kcal-display');
+  const minsEl=document.getElementById('step-mins-display');
+  const pctEl=document.getElementById('step-ring-pct');
+  if(countEl) countEl.textContent=steps.toLocaleString();
+  if(goalEl) goalEl.textContent=goal.toLocaleString();
+  if(kmEl) kmEl.textContent=km;
+  if(kcalEl) kcalEl.textContent=kcal;
+  if(minsEl) minsEl.textContent=activeMins;
+  if(pctEl) pctEl.textContent=pct+'%';
+
+  // Ring animation: dashoffset = 264 * (1 - pct/100)
+  const arc=document.getElementById('step-ring-arc');
+  if(arc) arc.setAttribute('stroke-dashoffset', 264*(1-pct/100));
+  // Turn ring green when goal hit
+  if(arc) arc.setAttribute('stroke', pct>=100?'#22c55e':'var(--red)');
+
+  // Goal chips
+  const chipsEl=document.getElementById('step-goal-chips');
+  if(chipsEl) chipsEl.innerHTML=STEP_GOALS.map(g=>
+    '<span class="step-goal-chip'+(g===goal?' active':'')+'" onclick="setStepGoal('+g+')">'+
+    (g>=1000?(g/1000)+'k':g)+'</span>'
+  ).join('');
+
+  // 7-day history bars
+  const histEl=document.getElementById('step-history-bars');
+  if(!histEl) return;
+  const log=getStepLog();
+  const days=[];
+  for(let i=6;i>=0;i--){
+    const d=new Date(Date.now()-i*86400000);
+    const ds=d.toISOString().slice(0,10);
+    const dayLabel=['S','M','T','W','T','F','S'][d.getDay()];
+    days.push({ds,label:dayLabel,steps:log[ds]||0});
+  }
+  const maxSteps=Math.max(goal,...days.map(d=>d.steps),1);
+  histEl.innerHTML=days.map(d=>{
+    const barPct=Math.min(100,Math.round(d.steps/maxSteps*100));
+    const isToday=d.ds===todayStr();
+    const hitGoal=d.steps>=goal;
+    const color=hitGoal?'#22c55e':'var(--red)';
+    const stepsLabel=d.steps>=1000?(d.steps/1000).toFixed(1)+'k':d.steps||'—';
+    return '<div class="step-bar-row">'+
+      '<div class="step-bar-day" style="'+(isToday?'color:var(--red);font-weight:900':'')+'">'+(isToday?'●':d.label)+'</div>'+
+      '<div class="step-bar-track">'+
+        '<div class="step-bar-fill" style="width:'+barPct+'%;background:'+color+'"></div>'+
+        (d.steps>=goal?'<span style="position:absolute;right:6px;top:50%;transform:translateY(-50%);font-size:9px;color:#fff;font-weight:700">GOAL ✓</span>':'')
+      +'</div>'+
+      '<div class="step-bar-val">'+stepsLabel+'</div>'+
+    '</div>';
+  }).join('');
+}
 let homeMode='workout';
 function setHomeMode(mode){
   homeMode=mode;
   document.getElementById('home-workout-panel').style.display=mode==='workout'?'block':'none';
   document.getElementById('home-food-panel').style.display=mode==='food'?'block':'none';
+  document.getElementById('home-steps-panel').style.display=mode==='steps'?'block':'none';
   document.getElementById('home-btn-workout').classList.toggle('active',mode==='workout');
   document.getElementById('home-btn-food').classList.toggle('active',mode==='food');
+  document.getElementById('home-btn-steps').classList.toggle('active',mode==='steps');
   if(mode==='food'){ foodDate=todayStr(); renderHomeFoodPanel(); }
+  if(mode==='steps') renderStepsPanel();
 }
 
 function renderHomeFoodPanel(){

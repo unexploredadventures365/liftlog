@@ -5538,14 +5538,38 @@ async function authMagicLink(){
 }
 
 async function authLogout(){
-  toggleUserMenu();
-  if(_sb) await _sb.auth.signOut();
-  _sbUser = null; _offlineMode = false;
-  // Clear sensitive state but keep localStorage for offline
+  // Close menu immediately
+  document.getElementById('user-menu').style.display = 'none';
+  
+  try{
+    if(_sb) await _sb.auth.signOut();
+  } catch(e){
+    console.warn('signOut error:',e);
+  }
+
+  // Reset state regardless of signOut success
+  _sbUser = null;
+  _offlineMode = false;
+  _syncPending = false;
+  clearTimeout(_syncDebounceTimer);
+
+  // Clear localStorage so next login starts fresh from cloud
+  localStorage.removeItem('liftlog_v1');
+
+  // Update UI
   document.getElementById('user-avatar-btn').style.display = 'none';
   document.getElementById('sync-dot').style.display = 'none';
+  document.getElementById('save-status').textContent = '✓ Saved';
+
+  // Show auth screen on top
   document.getElementById('auth-screen').style.display = 'block';
-  toast('Signed out');
+  document.getElementById('auth-screen').style.zIndex = '9999';
+
+  // Reset auth form to login tab
+  setAuthTab('login');
+  document.getElementById('auth-msg').textContent = '';
+
+  toast('Signed out successfully');
 }
 
 function useOfflineMode(){
@@ -5557,16 +5581,21 @@ function useOfflineMode(){
 
 function toggleUserMenu(){
   const m = document.getElementById('user-menu');
-  m.style.display = m.style.display === 'none' ? 'block' : 'none';
-  if(m.style.display === 'block'){
+  const isOpen = m.style.display === 'block';
+  m.style.display = isOpen ? 'none' : 'block';
+  if(!isOpen){
     const t = _lastSyncTime ? 'Last sync: '+_lastSyncTime.toLocaleTimeString() : 'Not synced yet';
     document.getElementById('user-menu-sync-time').textContent = t;
-    document.addEventListener('click', closeUserMenuOutside, {once:true, capture:true});
+    // Delay so this click doesn't immediately trigger closeOutside
+    setTimeout(()=>{
+      document.addEventListener('click', closeUserMenuOutside, {once:true, capture:true});
+    }, 100);
   }
 }
 function closeUserMenuOutside(e){
-  if(!document.getElementById('user-menu').contains(e.target)){
-    document.getElementById('user-menu').style.display = 'none';
+  const m=document.getElementById('user-menu');
+  if(m && !m.contains(e.target)){
+    m.style.display = 'none';
   }
 }
 

@@ -1403,7 +1403,7 @@ function importData(e){
   const f=e.target.files[0]; if(!f) return;
   const r=new FileReader(); r.onload=ev=>{
     try{const d=JSON.parse(ev.target.result);
-      if(confirm('Replace ALL current data?')){state.workoutHistory=d.workoutHistory||[];state.weightLog=d.weightLog||[];state.streak=d.streak||0;if(d.exercises)state.exercises=d.exercises;saveState();renderAll();toast('Imported!');}
+      if(confirm('Replace ALL current data?')){state.workoutHistory=d.workoutHistory||[];state.weightLog=d.weightLog||[];state.streak=d.streak||0;if(d.exercises)state.exercises=d.exercises;saveState();renderAll();toast('Imported! Syncing to cloud…');}
     }catch(err){toast('Invalid file');}
   }; r.readAsText(f); e.target.value='';
 }
@@ -1742,7 +1742,7 @@ function editPastWorkout(wid){
 function deleteWorkout(wid){
   if(!confirm('Delete this workout? Cannot be undone.')) return;
   state.workoutHistory=state.workoutHistory.filter(w=>w.id!==wid);
-  recalcStreak(); saveState();
+  recalcStreak(); saveState({profile:true, workout:"deleted"});
   renderWorkoutPage(); toast('Workout deleted');
 }
 
@@ -1764,7 +1764,7 @@ function savePastWorkout(ds){
   }
   state.workoutHistory.sort((a,b)=>a.date.localeCompare(b.date));
   learnFromWorkout(entry.exercises);
-  recalcStreak(); saveState();
+  recalcStreak(); saveState({profile:true, workout:"updated"});
   pastEditDate=null; pastEditExercises=[]; pastEditExpanded={}; pastEditIdx=-1;
   _pastLibMode=false;
   renderWorkoutPage();
@@ -1950,7 +1950,7 @@ function saveWorkout(){
   recalcStreak();
   learnFromWorkout(doneExercises);
   state.exercises.forEach(ex=>ex.sets.forEach(s=>s.done=false));
-  resetTimer(); saveState(); renderWorkoutPage(); toast('Workout saved! 💪 '+totalKcal+' kcal burned');
+  resetTimer(); saveState({workout:entry.id, profile:true, memory:true}); renderWorkoutPage(); toast('Workout saved! 💪 '+totalKcal+' kcal burned');
 }
 
 function getBestForEx(name){let b=0;state.workoutHistory.forEach(w=>{const ex=w.exercises.find(e=>e.name===name);if(ex)ex.sets.forEach(s=>{if(s.w>b)b=s.w;});});return b;}
@@ -2243,7 +2243,7 @@ function logWeight(){
   if(!kg||!date)return toast('Enter weight and date');
   state.weightLog.push({date,kg,note}); state.weightLog.sort((a,b)=>a.date.localeCompare(b.date));
   document.getElementById('w-kg').value=''; document.getElementById('w-note').value='';
-  saveState(); renderWeightPage(); toast('Weight logged!');
+  saveState({weight:true}); renderWeightPage(); toast('Weight logged!');
 }
 function renderWeightPage(){
   document.getElementById('w-date').valueAsDate=new Date();
@@ -2327,7 +2327,7 @@ function saveCalProfile(){
   const waterGoalInput=parseFloat(document.getElementById('cp-water-goal').value);
   const waterGoal=waterGoalInput>0?Math.round(waterGoalInput*1000):Math.round(wt*35/100)*100;
   state.calProfile={wt,ht,gender,age,fit,waterGoal};
-  saveState();
+  saveState({profile:true});
   renderCaloriesPage();
   // Refresh food page nutrition targets if visible
   if(homeMode==='food') renderHomeFoodPanel();
@@ -3212,7 +3212,7 @@ function autoSave(){
   state.exerciseDate=todayStr();
   clearTimeout(_autoSaveTimer);
   _autoSaveTimer=setTimeout(()=>{
-    saveState();
+    saveState({activeSession:true}); // only sync active session
   }, 800);
 }
 let restInterval=null, restSecs=0, restTotal=90;
@@ -3633,10 +3633,10 @@ function renderProgramsPage(){
 function selectProgram(id){
   if(state.activeProgram&&state.activeProgram.id===id){clearProgram();return;}
   state.activeProgram={id,dayIndex:0};
-  saveState(); renderProgramsPage();
+  saveState({profile:true}); renderProgramsPage();
   toast('Program started! Go to Workout to load today\'s session.');
 }
-function clearProgram(){state.activeProgram=null;saveState();renderProgramsPage();toast('Program stopped');}
+function clearProgram(){state.activeProgram=null;saveState({profile:true});renderProgramsPage();toast('Program stopped');}
 function loadProgramDay(){
   if(!state.activeProgram) return;
   const prog=PROGRAMS.find(p=>p.id===state.activeProgram.id);
@@ -3646,7 +3646,7 @@ function loadProgramDay(){
   state.exercises=day.exercises.map(ex=>({...ex,sets:ex.sets.map(s=>({...s,done:false}))}));
   state.expanded={0:true};
   state.activeProgram.dayIndex++;
-  saveState(); renderExercises();
+  saveState({activeSession:true}); renderExercises();
   showPage('workout');
   toast('Loaded: '+day.label);
 }
@@ -3756,7 +3756,7 @@ function dispatchParsed(parsed, targetDate, previewId, isPast){
       state.workoutHistory.push({id:_genId(),date:saveDate,duration:0,exercises:parsed,totalVolume,totalKcal});
     }
     state.workoutHistory.sort((a,b)=>a.date.localeCompare(b.date));
-    recalcStreak(); saveState(); renderWorkoutPage();
+    recalcStreak(); saveState({profile:true}); renderWorkoutPage();
     document.getElementById(previewId||'quick-add-preview').textContent='';
     toast(`Saved ${parsed.length} exercise${parsed.length>1?'s':''} for ${saveDate}!`);
   } else {
@@ -4027,7 +4027,7 @@ function getTodaySteps(){
 }
 function setTodaySteps(n){
   getStepLog()[todayStr()]=Math.max(0,n);
-  saveState();
+  saveState({step:todayStr()});
 }
 function getStepGoal(){
   return state.stepGoal||8000;
@@ -4136,7 +4136,7 @@ function syncManualSteps(){
 function setStepGoal(n){
   if(!n||n<100){toast('Enter a valid goal (e.g. 8000)');return;}
   state.stepGoal=n;
-  saveState();
+  saveState({profile:true});
   renderStepsPanel();
   toast('Goal set to '+n.toLocaleString()+' steps');
 }
@@ -4251,7 +4251,7 @@ function renderHomeWater(log){
     const g=document.createElement('div');
     g.className='water-glass'+(i<filledCups?' filled':'');
     g.textContent=i<filledCups?'💧':'○';
-    g.onclick=()=>{log.water=Math.max(0,(i+1)*cupMl);if(i<filledCups)log.water=i*cupMl;saveState();renderHomeFoodPanel();renderFoodPage();};
+    g.onclick=()=>{log.water=Math.max(0,(i+1)*cupMl);if(i<filledCups)log.water=i*cupMl;saveState({food:foodDate});renderHomeFoodPanel();renderFoodPage();};
     wrap.appendChild(g);
   }
 }
@@ -4320,9 +4320,9 @@ function renderHomeMealLog(log){
 function removeHomeFoodLog(meal,idx){
   const log=getFoodLog();
   (log.meals[meal]||[]).splice(idx,1);
-  saveState();
+  saveState({food:foodDate});
   renderHomeFoodPanel();
-  renderFoodPage(); // keep food page in sync
+  renderFoodPage();
 }
 
 // Indian Food Database — per 100g values from ICMR-NIN 2017
@@ -4650,7 +4650,7 @@ function logRecipe(){
   const log=getFoodLog();
   log.meals[meal].push({...recipeFood, grams:totalGrams, unit:'g', amount:totalGrams});
   state.foodLog[foodDate]=log;
-  saveState();
+  saveState({food:foodDate});
   closeRecipeBuilder();
   renderFoodPage();
   if(homeMode==='food') renderHomeFoodPanel();
@@ -4906,13 +4906,13 @@ function renderWater(log){
     g.className='water-glass'+(i<filledCups?' filled':'');
     g.textContent=i<filledCups?'💧':'○';
     g.title=(i+1)*cupMl+'ml';
-    g.onclick=()=>{log.water=Math.max(0,(i+1)*cupMl);if(i<filledCups)log.water=i*cupMl;saveState();renderFoodPage();};
+    g.onclick=()=>{log.water=Math.max(0,(i+1)*cupMl);if(i<filledCups)log.water=i*cupMl;saveState({food:foodDate});renderFoodPage();};
     wrap.appendChild(g);
   }
 }
 
-function addWater(ml){const log=getFoodLog();log.water=(log.water||0)+ml;saveState();renderFoodPage();if(homeMode==='food')renderHomeFoodPanel();}
-function resetWater(){const log=getFoodLog();log.water=0;saveState();renderFoodPage();if(homeMode==='food')renderHomeFoodPanel();}
+function addWater(ml){const log=getFoodLog();log.water=(log.water||0)+ml;saveState({food:foodDate});renderFoodPage();if(homeMode==='food')renderHomeFoodPanel();}
+function resetWater(){const log=getFoodLog();log.water=0;saveState({food:foodDate});renderFoodPage();if(homeMode==='food')renderHomeFoodPanel();}
 
 function renderMacroBars(tot){
   const rda=getRDA();
@@ -5001,7 +5001,7 @@ function renderMealLog(log){
 function removeFoodLog(meal,idx){
   const log=getFoodLog();
   (log.meals[meal]||[]).splice(idx,1);
-  saveState();
+  saveState({food:foodDate});
   renderFoodPage();
   if(homeMode==='food') renderHomeFoodPanel();
 }
@@ -5196,7 +5196,7 @@ function confirmAddFood(){
   log.meals[_fSelectedMeal].push(entry);
   if(!state.foodLog) state.foodLog={};
   state.foodLog[foodDate]=log;
-  saveState();
+  saveState({food:foodDate});
   document.getElementById('food-qty-modal').style.display='none';
   renderFoodPage();
   if(homeMode==='food') renderHomeFoodPanel();
@@ -5233,7 +5233,7 @@ function addCustomFood(){
   FOOD_DB.push(f);
   if(!state.customFoods) state.customFoods=[];
   state.customFoods.push(f);
-  saveState();
+  saveState({customFood:true});
 
   // Clear all fields
   ['cf-name','cf-kcal','cf-protein','cf-carbs','cf-fat','cf-fibre'].forEach(id=>{
@@ -5599,7 +5599,32 @@ function closeUserMenuOutside(e){
   }
 }
 
-// ── Sync: push local state → Supabase ────────────────────────────────────────
+// ── Dirty tracking — only sync what changed ───────────────────────────────────
+const _dirty = {
+  profile: false,
+  activeSession: false,
+  exerciseMemory: false,
+  workouts: new Set(),    // workout IDs that changed
+  weightLog: false,
+  foodDates: new Set(),   // food log dates that changed
+  stepDates: new Set(),   // step log dates that changed
+  customFoods: false
+};
+
+function markDirty(type, key){
+  if(type==='workout') _dirty.workouts.add(key);
+  else if(type==='food') _dirty.foodDates.add(key);
+  else if(type==='step') _dirty.stepDates.add(key);
+  else _dirty[type]=true;
+}
+
+function clearDirty(){
+  _dirty.profile=false; _dirty.activeSession=false;
+  _dirty.exerciseMemory=false; _dirty.weightLog=false; _dirty.customFoods=false;
+  _dirty.workouts.clear(); _dirty.foodDates.clear(); _dirty.stepDates.clear();
+}
+
+// ── Sync: push only dirty data → Supabase ────────────────────────────────────
 async function syncToSupabase(){
   if(!_sb || !_sbUser || _offlineMode) return;
   setSyncDot('syncing');
@@ -5607,77 +5632,103 @@ async function syncToSupabase(){
     const uid = _sbUser.id;
     const p = [];
 
-    // Profile + cal profile + streak
-    p.push(_sb.from('profiles').upsert({
-      id: uid,
-      cal_profile: state.calProfile,
-      step_goal: state.stepGoal||8000,
-      streak: state.streak,
-      last_saved: new Date().toISOString()
-    }));
-
-    // Active session (today's exercises)
-    p.push(_sb.from('active_session').upsert({
-      user_id: uid,
-      exercises: state.exercises,
-      exercise_date: state.exerciseDate||todayStr()
-    }));
-
-    // Exercise memory
-    p.push(_sb.from('exercise_memory').upsert({
-      user_id: uid,
-      memory: state.exerciseMemory||{}
-    }));
-
-    // Workout history — upsert all (batch by 50 to stay within limits)
-    const hist = state.workoutHistory||[];
-    for(let i=0;i<hist.length;i+=50){
-      const batch = hist.slice(i,i+50).map(w=>({
-        id: w.id, user_id: uid, date: w.date,
-        exercises: w.exercises,
-        total_volume: w.totalVolume||0,
-        total_kcal: w.totalKcal||0,
-        duration: w.duration||0
+    // Profile (streak, calProfile, stepGoal)
+    if(_dirty.profile){
+      p.push(_sb.from('profiles').upsert({
+        id: uid,
+        cal_profile: state.calProfile,
+        step_goal: state.stepGoal||8000,
+        streak: state.streak,
+        last_saved: new Date().toISOString()
       }));
-      p.push(_sb.from('workouts').upsert(batch));
     }
 
-    // Weight log — upsert all
-    const wl = (state.weightLog||[]).map(e=>({
-      user_id: uid, date: e.date, weight_kg: e.kg, note: e.note||''
-    }));
-    if(wl.length) p.push(_sb.from('weight_log').upsert(wl,{onConflict:'user_id,date'}));
+    // Active session — always sync (small, fast, important)
+    if(_dirty.activeSession){
+      p.push(_sb.from('active_session').upsert({
+        user_id: uid,
+        exercises: state.exercises,
+        exercise_date: state.exerciseDate||todayStr()
+      }));
+    }
 
-    // Food log — upsert each date
-    const fl = state.foodLog||{};
-    const foodRows = Object.entries(fl).map(([date,log])=>({
-      user_id: uid, date,
-      meals: log.meals||{},
-      water_ml: log.water||0
-    }));
-    if(foodRows.length) p.push(_sb.from('food_log').upsert(foodRows,{onConflict:'user_id,date'}));
+    // Exercise memory
+    if(_dirty.exerciseMemory){
+      p.push(_sb.from('exercise_memory').upsert({
+        user_id: uid,
+        memory: state.exerciseMemory||{}
+      }));
+    }
 
-    // Step log
-    const sl = state.stepLog||{};
-    const stepRows = Object.entries(sl).filter(([,v])=>v>0).map(([date,steps])=>({
-      user_id: uid, date, steps
-    }));
-    if(stepRows.length) p.push(_sb.from('step_log').upsert(stepRows,{onConflict:'user_id,date'}));
+    // Only changed workouts
+    if(_dirty.workouts.size>0){
+      const changedWorkouts=[...state.workoutHistory]
+        .filter(w=>_dirty.workouts.has(w.id))
+        .map(w=>({
+          id:w.id, user_id:uid, date:w.date,
+          exercises:w.exercises,
+          total_volume:w.totalVolume||0,
+          total_kcal:w.totalKcal||0,
+          duration:w.duration||0
+        }));
+      if(changedWorkouts.length)
+        p.push(_sb.from('workouts').upsert(changedWorkouts));
+    }
 
-    // Custom foods
-    const cf = (state.customFoods||[]).map(f=>({
-      user_id: uid, food_data: f
-    }));
-    if(cf.length) p.push(_sb.from('custom_foods').upsert(cf,{onConflict:'user_id,(food_data->>\'name\')'}));
+    // Weight log (only if changed)
+    if(_dirty.weightLog){
+      const wl=(state.weightLog||[]).map(e=>({
+        user_id:uid, date:e.date, weight_kg:e.kg, note:e.note||''
+      }));
+      if(wl.length) p.push(_sb.from('weight_log').upsert(wl,{onConflict:'user_id,date'}));
+    }
+
+    // Only changed food dates
+    if(_dirty.foodDates.size>0){
+      const fl=state.foodLog||{};
+      const foodRows=[..._dirty.foodDates]
+        .filter(date=>fl[date])
+        .map(date=>({
+          user_id:uid, date,
+          meals:fl[date].meals||{},
+          water_ml:fl[date].water||0
+        }));
+      if(foodRows.length)
+        p.push(_sb.from('food_log').upsert(foodRows,{onConflict:'user_id,date'}));
+    }
+
+    // Only changed step dates
+    if(_dirty.stepDates.size>0){
+      const sl=state.stepLog||{};
+      const stepRows=[..._dirty.stepDates]
+        .filter(date=>sl[date]>0)
+        .map(date=>({user_id:uid, date, steps:sl[date]}));
+      if(stepRows.length)
+        p.push(_sb.from('step_log').upsert(stepRows,{onConflict:'user_id,date'}));
+    }
+
+    // Custom foods (only if changed)
+    if(_dirty.customFoods){
+      const cf=(state.customFoods||[]).map(f=>({user_id:uid, food_data:f}));
+      if(cf.length)
+        p.push(_sb.from('custom_foods').upsert(cf,{onConflict:'user_id,(food_data->>\'name\')'}));
+    }
+
+    if(p.length===0){
+      // Nothing dirty — skip
+      setSyncDot('ok');
+      return;
+    }
 
     await Promise.all(p);
+    clearDirty();
     _lastSyncTime = new Date();
     setSyncDot('ok');
-    document.getElementById('save-status').textContent = '☁ Synced';
+    document.getElementById('save-status').textContent='☁ Synced';
   } catch(e){
     console.warn('Sync error:',e);
     setSyncDot('error');
-    document.getElementById('save-status').textContent = '✓ Local';
+    document.getElementById('save-status').textContent='✓ Local';
   }
 }
 
@@ -5765,16 +5816,34 @@ async function syncFromSupabase(){
   }
 }
 
-// ── Patch saveState to also trigger Supabase sync ────────────────────────────
-// We wrap the original by monkey-patching after definition
+// ── Patch saveState to mark dirty + debounce sync ────────────────────────────
 (function(){
   const _orig = saveState;
-  saveState = function(){
+  saveState = function(dirtyHint){
     _orig();
     if(_sbUser && !_offlineMode){
+      // Mark what changed based on hint passed by callers
+      if(dirtyHint){
+        if(dirtyHint.workout) markDirty('workout', dirtyHint.workout);
+        if(dirtyHint.food)    markDirty('food', dirtyHint.food);
+        if(dirtyHint.step)    markDirty('step', dirtyHint.step);
+        if(dirtyHint.profile) markDirty('profile');
+        if(dirtyHint.weight)  markDirty('weightLog');
+        if(dirtyHint.customFood) markDirty('customFoods');
+        if(dirtyHint.memory)  markDirty('exerciseMemory');
+      } else {
+        // No hint = mark everything dirty (full sync)
+        _dirty.profile=true; _dirty.activeSession=true;
+        _dirty.exerciseMemory=true; _dirty.weightLog=true; _dirty.customFoods=true;
+        (state.workoutHistory||[]).forEach(w=>_dirty.workouts.add(w.id));
+        Object.keys(state.foodLog||{}).forEach(d=>_dirty.foodDates.add(d));
+        Object.keys(state.stepLog||{}).forEach(d=>_dirty.stepDates.add(d));
+      }
+      // Always mark active session dirty (fast, small)
+      _dirty.activeSession=true;
       clearTimeout(_syncDebounceTimer);
       setSyncDot('pending');
-      _syncDebounceTimer = setTimeout(syncToSupabase, 2000);
+      _syncDebounceTimer = setTimeout(syncToSupabase, 5000); // 5s debounce
     }
   };
 })();

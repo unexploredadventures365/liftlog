@@ -5723,10 +5723,11 @@ async function syncFromSupabase(){
       });
     }
 
-    // Save to localStorage as offline cache
-    saveState();
+    // Save to localStorage as offline cache (use original to avoid triggering upload)
+    _origSaveState();
     _lastSyncTime = new Date();
     setSyncDot('ok');
+    document.getElementById('save-status').textContent='☁ Synced';
   } catch(e){
     console.warn('Fetch error:',e);
     setSyncDot('error');
@@ -5761,9 +5762,20 @@ function setSyncDot(status){
 
 async function syncNow(){
   document.getElementById('user-menu').style.display = 'none';
-  toast('Syncing…');
-  await syncToSupabase();
-  toast('Synced ✓');
+  toast('Syncing from cloud…');
+  await syncFromSupabase();
+  renderAll();
+  renderWorkoutPage();
+  // Re-render active page
+  const activePage=document.querySelector('.page.active');
+  if(activePage){
+    const pageName=activePage.id.replace('page-','');
+    if(pageName==='progress') renderProgress();
+    if(pageName==='records') renderRecordsPage();
+    if(pageName==='food') renderFoodPage();
+    if(pageName==='weight') renderWeightPage();
+  }
+  toast('Synced ✓ All data up to date');
 }
 
 // ── Init: check auth state and boot app ───────────────────────────────────────
@@ -5774,8 +5786,13 @@ async function initSupabase(){
     return;
   }
 
-  // Listen for auth state changes
+  // Listen for auth state changes (fires on login, logout, token refresh)
   _sb.auth.onAuthStateChange(async (event, session)=>{
+    if(event==='SIGNED_OUT'){
+      _sbUser = null;
+      document.getElementById('auth-screen').style.display = 'block';
+      return;
+    }
     if(session?.user){
       _sbUser = session.user;
       document.getElementById('auth-screen').style.display = 'none';
@@ -5790,28 +5807,47 @@ async function initSupabase(){
       document.getElementById('user-menu-name').textContent = name;
       document.getElementById('user-menu-email').textContent = session.user.email;
 
-      // Load local data first for instant UI, then sync from cloud
-      loadState();
-      renderAll();
-      initTelegram();
-      await syncFromSupabase();
-      renderAll(); // re-render with cloud data
-      toast('Welcome back, '+name.split(' ')[0]+'! ☁');
-    } else {
-      _sbUser = null;
-      // Show auth screen
-      document.getElementById('auth-screen').style.display = 'block';
+      // Only do full sync on SIGNED_IN or initial load, not on every token refresh
+      if(event==='SIGNED_IN' || event==='INITIAL_SESSION'){
+        // Show local data instantly
+        loadState();
+        renderAll();
+        initTelegram();
+        setSyncDot('syncing');
+        document.getElementById('save-status').textContent='☁ Syncing…';
+
+        // Pull from Supabase
+        await syncFromSupabase();
+
+        // Full re-render of everything with fresh cloud data
+        renderAll();
+        renderWorkoutPage();
+        renderWeightPage();
+        updateDataPage();
+        renderCaloriesPage();
+        // Re-render current active page
+        const activePage=document.querySelector('.page.active');
+        if(activePage){
+          const pageName=activePage.id.replace('page-','');
+          if(pageName==='progress') renderProgress();
+          if(pageName==='records') renderRecordsPage();
+          if(pageName==='report') showReport(reportPeriod);
+          if(pageName==='food'){renderFoodPage();}
+          if(pageName==='steps') renderStepsPanel();
+        }
+        toast('Synced from cloud ☁ '+name.split(' ')[0]);
+      }
     }
   });
 
-  // Check existing session
+  // Check existing session immediately
   const {data:{session}} = await _sb.auth.getSession();
   if(!session){
-    // No session — show auth screen
-    // But first load local state so offline mode works instantly
+    // No session — show auth screen but render app underneath
     loadState(); renderAll(); initTelegram();
     document.getElementById('auth-screen').style.display = 'block';
   }
+  // If session exists, onAuthStateChange fires with INITIAL_SESSION automatically
 }
 
 loadState();renderAll();initTelegram();initSupabase();

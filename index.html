@@ -1943,14 +1943,19 @@ function saveWorkout(){
     totalVolume:state.exercises.reduce((a,e)=>a+e.sets.filter(s=>s.done).reduce((b,s)=>b+s.w*s.r,0),0),
     totalKcal
   };
-  // Remove any existing entry for today before adding (prevent duplicates)
-  state.workoutHistory=state.workoutHistory.filter(w=>w.date!==today);
+  // Add new entry — allow multiple sessions per day (morning + evening etc.)
   state.workoutHistory.push(entry);
   state.workoutHistory.sort((a,b)=>a.date.localeCompare(b.date));
   recalcStreak();
   learnFromWorkout(doneExercises);
+  // Reset sets to undone but keep exercises for next session
   state.exercises.forEach(ex=>ex.sets.forEach(s=>s.done=false));
-  resetTimer(); saveState({workout:entry.id, profile:true, memory:true}); renderWorkoutPage(); toast('Workout saved! 💪 '+totalKcal+' kcal burned');
+  // Reset selectedDate to today so the workout page shows today's section
+  selectedDate=null;
+  resetTimer();
+  saveState({workout:entry.id, profile:true, memory:true});
+  renderWorkoutPage();
+  toast('Workout saved! 💪 '+totalKcal+' kcal burned');
 }
 
 function getBestForEx(name){let b=0;state.workoutHistory.forEach(w=>{const ex=w.exercises.find(e=>e.name===name);if(ex)ex.sets.forEach(s=>{if(s.w>b)b=s.w;});});return b;}
@@ -5751,15 +5756,20 @@ async function syncFromSupabase(){
     const {data:wkts} = await _sb.from('workouts').select('*').eq('user_id',uid).order('date',{ascending:true});
     if(wkts&&wkts.length){
       state.workoutHistory = wkts.map(w=>({
-        id:w.id, date:w.date, exercises:w.exercises,
-        totalVolume:w.total_volume, totalKcal:w.total_kcal, duration:w.duration
+        id:w.id,
+        // Supabase date columns can include timezone offset — always slice to YYYY-MM-DD
+        date: (w.date||'').slice(0,10),
+        exercises:w.exercises||[],
+        totalVolume:w.total_volume||0,
+        totalKcal:w.total_kcal||0,
+        duration:w.duration||0
       }));
     }
 
     // Active session
     const {data:sess} = await _sb.from('active_session').select('*').eq('user_id',uid).single();
     if(sess&&sess.exercises&&sess.exercises.length){
-      const savedDate = sess.exercise_date;
+      const savedDate = (sess.exercise_date||'').slice(0,10);
       const today = todayStr();
       if(savedDate===today){
         state.exercises = sess.exercises;
@@ -5772,20 +5782,30 @@ async function syncFromSupabase(){
 
     // Weight log
     const {data:wl} = await _sb.from('weight_log').select('*').eq('user_id',uid).order('date');
-    if(wl) state.weightLog = wl.map(e=>({date:e.date,kg:parseFloat(e.weight_kg),note:e.note||''}));
+    if(wl) state.weightLog = wl.map(e=>({
+      date:(e.date||'').slice(0,10),
+      kg:parseFloat(e.weight_kg),
+      note:e.note||''
+    }));
 
     // Food log
     const {data:fl} = await _sb.from('food_log').select('*').eq('user_id',uid);
     if(fl){
       state.foodLog = {};
-      fl.forEach(r=>{ state.foodLog[r.date] = {meals:r.meals, water:r.water_ml}; });
+      fl.forEach(r=>{
+        const d=(r.date||'').slice(0,10);
+        if(d) state.foodLog[d] = {meals:r.meals||{}, water:r.water_ml||0};
+      });
     }
 
     // Step log
     const {data:sl} = await _sb.from('step_log').select('*').eq('user_id',uid);
     if(sl){
       state.stepLog = {};
-      sl.forEach(r=>{ state.stepLog[r.date] = r.steps; });
+      sl.forEach(r=>{
+        const d=(r.date||'').slice(0,10);
+        if(d) state.stepLog[d] = r.steps||0;
+      });
     }
 
     // Exercise memory

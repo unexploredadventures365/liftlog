@@ -1742,7 +1742,11 @@ function editPastWorkout(wid){
 function deleteWorkout(wid){
   if(!confirm('Delete this workout? Cannot be undone.')) return;
   state.workoutHistory=state.workoutHistory.filter(w=>w.id!==wid);
-  recalcStreak(); saveState({profile:true, workout:"deleted"});
+  // Track deleted ID so Supabase can remove it too
+  if(!state._deletedWorkouts) state._deletedWorkouts=[];
+  state._deletedWorkouts.push(wid);
+  recalcStreak();
+  saveState({profile:true, deletedWorkout:wid});
   renderWorkoutPage(); toast('Workout deleted');
 }
 
@@ -1764,7 +1768,8 @@ function savePastWorkout(ds){
   }
   state.workoutHistory.sort((a,b)=>a.date.localeCompare(b.date));
   learnFromWorkout(entry.exercises);
-  recalcStreak(); saveState({profile:true, workout:"updated"});
+  recalcStreak();
+  saveState({profile:true, workout:entry.id, memory:true});
   pastEditDate=null; pastEditExercises=[]; pastEditExpanded={}; pastEditIdx=-1;
   _pastLibMode=false;
   renderWorkoutPage();
@@ -3761,7 +3766,8 @@ function dispatchParsed(parsed, targetDate, previewId, isPast){
       state.workoutHistory.push({id:_genId(),date:saveDate,duration:0,exercises:parsed,totalVolume,totalKcal});
     }
     state.workoutHistory.sort((a,b)=>a.date.localeCompare(b.date));
-    recalcStreak(); saveState({profile:true}); renderWorkoutPage();
+    const savedId=existing?existing.id:state.workoutHistory.find(w=>w.date===saveDate)?.id;
+    recalcStreak(); saveState({profile:true, workout:savedId}); renderWorkoutPage();
     document.getElementById(previewId||'quick-add-preview').textContent='';
     toast(`Saved ${parsed.length} exercise${parsed.length>1?'s':''} for ${saveDate}!`);
   } else {
@@ -5609,24 +5615,27 @@ const _dirty = {
   profile: false,
   activeSession: false,
   exerciseMemory: false,
-  workouts: new Set(),    // workout IDs that changed
+  workouts: new Set(),      // workout IDs to upsert
+  deletedWorkouts: new Set(), // workout IDs to delete from Supabase
   weightLog: false,
-  foodDates: new Set(),   // food log dates that changed
-  stepDates: new Set(),   // step log dates that changed
+  foodDates: new Set(),
+  stepDates: new Set(),
   customFoods: false
 };
 
 function markDirty(type, key){
-  if(type==='workout') _dirty.workouts.add(key);
-  else if(type==='food') _dirty.foodDates.add(key);
-  else if(type==='step') _dirty.stepDates.add(key);
+  if(type==='workout')        _dirty.workouts.add(key);
+  else if(type==='deletedWorkout') _dirty.deletedWorkouts.add(key);
+  else if(type==='food')      _dirty.foodDates.add(key);
+  else if(type==='step')      _dirty.stepDates.add(key);
   else _dirty[type]=true;
 }
 
 function clearDirty(){
   _dirty.profile=false; _dirty.activeSession=false;
   _dirty.exerciseMemory=false; _dirty.weightLog=false; _dirty.customFoods=false;
-  _dirty.workouts.clear(); _dirty.foodDates.clear(); _dirty.stepDates.clear();
+  _dirty.workouts.clear(); _dirty.deletedWorkouts.clear();
+  _dirty.foodDates.clear(); _dirty.stepDates.clear();
 }
 
 // ── Sync: push only dirty data → Supabase ────────────────────────────────────
@@ -5665,7 +5674,14 @@ async function syncToSupabase(){
       }));
     }
 
-    // Only changed workouts
+    // Delete removed workouts from Supabase
+    if(_dirty.deletedWorkouts.size>0){
+      for(const wid of _dirty.deletedWorkouts){
+        p.push(_sb.from('workouts').delete().eq('id',wid).eq('user_id',uid));
+      }
+    }
+
+    // Only changed workouts (upsert)
     if(_dirty.workouts.size>0){
       const changedWorkouts=[...state.workoutHistory]
         .filter(w=>_dirty.workouts.has(w.id))
@@ -5719,7 +5735,7 @@ async function syncToSupabase(){
         p.push(_sb.from('custom_foods').upsert(cf,{onConflict:'user_id,(food_data->>\'name\')'}));
     }
 
-    if(p.length===0){
+    if(p.length===0 && _dirty.workouts.size===0 && _dirty.deletedWorkouts.size===0){
       // Nothing dirty — skip
       setSyncDot('ok');
       return;
@@ -5844,13 +5860,14 @@ async function syncFromSupabase(){
     if(_sbUser && !_offlineMode){
       // Mark what changed based on hint passed by callers
       if(dirtyHint){
-        if(dirtyHint.workout) markDirty('workout', dirtyHint.workout);
-        if(dirtyHint.food)    markDirty('food', dirtyHint.food);
-        if(dirtyHint.step)    markDirty('step', dirtyHint.step);
-        if(dirtyHint.profile) markDirty('profile');
-        if(dirtyHint.weight)  markDirty('weightLog');
-        if(dirtyHint.customFood) markDirty('customFoods');
-        if(dirtyHint.memory)  markDirty('exerciseMemory');
+        if(dirtyHint.workout)        markDirty('workout', dirtyHint.workout);
+        if(dirtyHint.deletedWorkout) markDirty('deletedWorkout', dirtyHint.deletedWorkout);
+        if(dirtyHint.food)           markDirty('food', dirtyHint.food);
+        if(dirtyHint.step)           markDirty('step', dirtyHint.step);
+        if(dirtyHint.profile)        markDirty('profile');
+        if(dirtyHint.weight)         markDirty('weightLog');
+        if(dirtyHint.customFood)     markDirty('customFoods');
+        if(dirtyHint.memory)         markDirty('exerciseMemory');
       } else {
         // No hint = mark everything dirty (full sync)
         _dirty.profile=true; _dirty.activeSession=true;
@@ -5934,8 +5951,37 @@ async function initSupabase(){
         setSyncDot('syncing');
         document.getElementById('save-status').textContent='☁ Syncing…';
 
-        // Pull from Supabase
+        // Pull from Supabase first
         await syncFromSupabase();
+
+        // If Supabase had no workouts but we have local data → push everything up
+        // This handles first-time sync for existing users
+        const localHist=state.workoutHistory||[];
+        if(localHist.length>0){
+          try{
+            const {data:existing}=await _sb.from('workouts')
+              .select('id').eq('user_id',_sbUser.id).limit(1);
+            const supabaseEmpty=!existing||existing.length===0;
+            if(supabaseEmpty){
+              // First time — push all local workouts to cloud
+              setSyncDot('syncing');
+              document.getElementById('save-status').textContent='☁ First sync…';
+              const uid=_sbUser.id;
+              // Batch in groups of 50
+              for(let i=0;i<localHist.length;i+=50){
+                const batch=localHist.slice(i,i+50).map(w=>({
+                  id:w.id,user_id:uid,date:w.date,
+                  exercises:w.exercises,
+                  total_volume:w.totalVolume||0,
+                  total_kcal:w.totalKcal||0,
+                  duration:w.duration||0
+                }));
+                await _sb.from('workouts').upsert(batch);
+              }
+              toast('All '+localHist.length+' workouts uploaded to cloud ✓');
+            }
+          }catch(e){console.warn('First-sync upload error:',e);}
+        }
 
         // Full re-render of everything with fresh cloud data
         renderAll();
@@ -5953,7 +5999,9 @@ async function initSupabase(){
           if(pageName==='food'){renderFoodPage();}
           if(pageName==='steps') renderStepsPanel();
         }
-        toast('Synced from cloud ☁ '+name.split(' ')[0]);
+        setSyncDot('ok');
+        document.getElementById('save-status').textContent='☁ Synced';
+        toast('Welcome back, '+name.split(' ')[0]+'! ☁');
       }
     }
   });

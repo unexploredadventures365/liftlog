@@ -1915,6 +1915,9 @@ function addCustomExercise(){
   // Learn immediately so it shows in progress + memory
   learnExercise(name.toUpperCase(), muscle, met);
 
+  // Inject into EXERCISE_DB so it shows in the library permanently
+  injectIntoExerciseDB(name.toUpperCase(), muscle, met);
+
   // Pre-fill sets from last session if available
   const last=getLastSession(name.toUpperCase());
   const sets=last && last.sets.length
@@ -3161,7 +3164,7 @@ function renderLibraryList(){
       item.innerHTML=`
         <div class="lib-svg-icon">${svgMarkup}</div>
         <div class="lib-info">
-          <div class="lib-name">${ex.name}</div>
+          <div class="lib-name">${ex.name}${ex._custom?'<span style="font-size:9px;background:var(--red);color:#fff;padding:2px 5px;border-radius:4px;font-weight:700;margin-left:5px;vertical-align:middle">MINE</span>':''}</div>
           <div class="lib-muscle-tag">${muscle} &middot; ${ex.equip}</div>
           <div class="lib-kcal">🔥 ~${kcal} kcal / 3 sets</div>
           ${lastLine}
@@ -3850,6 +3853,40 @@ function guessMuscle(name){
 // Persists learned muscle groups and MET values for every exercise ever used
 // key: uppercase exercise name → {muscle, met, count}
 function getExMemory(){ return state.exerciseMemory||(state.exerciseMemory={}); }
+
+// Inject a custom exercise into EXERCISE_DB so it shows in the library
+function injectIntoExerciseDB(name, muscle, met){
+  const validMuscle=EXERCISE_DB[muscle]?muscle:'Other';
+  // Don't add if already in DB (case-insensitive)
+  const exists=Object.values(EXERCISE_DB).some(list=>
+    list.some(e=>e.name.toUpperCase()===name.toUpperCase())
+  );
+  if(exists) return;
+  if(!EXERCISE_DB[validMuscle]) EXERCISE_DB[validMuscle]=[];
+  EXERCISE_DB[validMuscle].push({
+    name:name,
+    equip:'Any',
+    met:met||5,
+    _custom:true
+  });
+}
+
+// On app load, restore all previously learned exercises into EXERCISE_DB
+// so they show up in the library even after page refresh
+function loadCustomExercisesIntoDB(){
+  const mem=getExMemory();
+  Object.entries(mem).forEach(([name,data])=>{
+    if(data.muscle) injectIntoExerciseDB(name, data.muscle, data.met);
+  });
+  // Also scan workout history for any exercises not in memory
+  (state.workoutHistory||[]).forEach(w=>{
+    w.exercises.forEach(ex=>{
+      if(ex.muscle && ex.muscle!=='Other'){
+        injectIntoExerciseDB(ex.name, ex.muscle, ex.met||5);
+      }
+    });
+  });
+}
 
 function learnExercise(name, muscle, met){
   const mem=getExMemory();
@@ -5379,10 +5416,11 @@ function showPage(name){
 
 function renderAll(){
   document.getElementById('streak-count').textContent=state.streak;
+  // Restore custom exercises into library from history + memory
+  loadCustomExercisesIntoDB();
   renderWorkoutPage();
   renderWeightPage();
   updateDataPage();
-  // Init food date to today so it's ready when user switches to food mode
   foodDate=todayStr();
 }
 // ─── SUPABASE INTEGRATION ────────────────────────────────────────────────────
@@ -5841,6 +5879,8 @@ async function syncFromSupabase(){
 
     // Save to localStorage as offline cache (use original to avoid triggering upload)
     _origSaveState();
+    // Re-inject custom exercises into library from updated memory + history
+    loadCustomExercisesIntoDB();
     _lastSyncTime = new Date();
     setSyncDot('ok');
     document.getElementById('save-status').textContent='☁ Synced';

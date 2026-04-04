@@ -90,8 +90,8 @@ select.inp{cursor:pointer}
 .set-num{text-align:left!important;font-size:13px;font-weight:600;color:var(--text2)}
 .set-inp{width:55px;padding:5px;border:1px solid var(--border);border-radius:6px;text-align:center;font-family:var(--font-body);font-weight:600;font-size:14px;background:var(--surface2);color:var(--text);-webkit-appearance:none}
 .set-inp:focus{outline:none;border-color:var(--red)}
-.done-btn{width:28px;height:28px;border-radius:50%;border:1px solid var(--border);background:transparent;cursor:pointer;font-size:13px;color:var(--text3);display:flex;align-items:center;justify-content:center;margin:0 auto;transition:all .15s}
-.done-btn.done{background:var(--red);border-color:var(--red);color:#fff}
+.done-btn{width:32px;height:32px;border-radius:50%;border:2px solid var(--border);background:transparent;cursor:pointer;font-size:15px;color:var(--text3);display:flex;align-items:center;justify-content:center;margin:0 auto;transition:all .2s;font-weight:700}
+.done-btn.done{background:var(--red);border-color:var(--red);color:#fff;transform:scale(1.1)}
 .add-set-row{padding:8px 12px;border-top:1px solid var(--border)}
 .add-set-btn{width:100%;padding:7px;border:1px dashed var(--border);border-radius:8px;background:transparent;color:var(--text3);font-family:var(--font-body);font-size:13px;font-weight:500;cursor:pointer}
 .pill-row{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:12px}
@@ -1286,8 +1286,8 @@ select.inp{cursor:pointer}
     <div class="lib-custom-footer">
       <div class="lib-custom-label">Can't find it? Add your own:</div>
       <div class="lib-custom-row">
-        <input class="lib-custom-inp" id="custom-ex-name" type="text" placeholder="Exercise name…" autocomplete="off">
-        <select class="lib-custom-sel" id="custom-ex-muscle">
+        <input class="lib-custom-inp" id="custom-ex-name" type="text" placeholder="Exercise name…" autocomplete="off" style="flex:3">
+        <select class="lib-custom-sel" id="custom-ex-muscle" style="flex:2">
           <option value="Chest">Chest</option>
           <option value="Back">Back</option>
           <option value="Shoulders">Shoulders</option>
@@ -1302,8 +1302,15 @@ select.inp{cursor:pointer}
           <option value="Forearms">Forearms</option>
           <option value="Other">Other</option>
         </select>
-        <button class="lib-custom-btn" onclick="addCustomExercise()">Add +</button>
       </div>
+      <div style="display:flex;gap:6px;align-items:center;margin-top:6px">
+        <div style="flex:1">
+          <div style="font-size:10px;font-weight:700;text-transform:uppercase;color:var(--text3);margin-bottom:3px">Kcal / rep <span style="font-weight:400;text-transform:none">(optional)</span></div>
+          <input class="lib-custom-inp" id="custom-ex-kcal" type="number" inputmode="decimal" placeholder="e.g. 0.5" step="0.1" style="width:100%;font-size:13px">
+        </div>
+        <button class="lib-custom-btn" onclick="addCustomExercise()" style="margin-top:18px">Add +</button>
+      </div>
+      <div style="font-size:10px;color:var(--text3);margin-top:4px">Leave kcal blank to auto-calculate from MET × body weight</div>
     </div>
   </div>
 </div>
@@ -1852,18 +1859,21 @@ function bindSetInputs(ex,i){
   const tbody=document.getElementById('tbody-'+i); if(!tbody) return;
   const bw=state.calProfile.wt||75;
   ex.sets.forEach((s,j)=>{
-    const kcal=calcSetCalories(ex.name,s.w,Math.max(1,s.r),bw,ex.met);
+    const kcal=calcSetCalories(ex.name,s.w,Math.max(1,s.r),bw,ex.met,ex.kcalPerRep||0);
     const rpe=s.rpe||0;
     const rpeColors=['','#22c55e','#22c55e','#84cc16','#84cc16','#eab308','#eab308','#f97316','#f97316','#ef4444','#dc2626'];
-    const tr=document.createElement('tr'); tr.style.opacity=s.done?'0.55':'1';
+    const tr=document.createElement('tr');
+    if(s.done){
+      tr.style.cssText='background:rgba(34,197,94,0.08);border-radius:8px;transition:background .2s';
+    }
     tr.id=`set-row-${i}-${j}`;
     tr.innerHTML=`
-      <td class="set-num" style="font-size:11px">
-        Set ${j+1}
-        <div id="set-kcal-${i}-${j}" style="font-size:9px;color:var(--red);font-weight:700;margin-top:1px">${kcal} kcal</div>
+      <td class="set-num" style="font-size:11px;${s.done?'color:#22c55e;font-weight:700':''}">
+        ${s.done?'✓':''}Set ${j+1}
+        <div id="set-kcal-${i}-${j}" style="font-size:9px;color:${s.done?'#22c55e':'var(--red)'};font-weight:700;margin-top:1px">${kcal} kcal</div>
       </td>
-      <td><input class="set-inp" type="number" value="${s.w}" step="2.5" inputmode="decimal" data-i="${i}" data-j="${j}" data-k="w"></td>
-      <td><input class="set-inp" type="number" value="${s.r}" step="1" inputmode="numeric" data-i="${i}" data-j="${j}" data-k="r"></td>
+      <td><input class="set-inp" type="number" value="${s.w}" step="2.5" inputmode="decimal" data-i="${i}" data-j="${j}" data-k="w" style="${s.done?'color:#22c55e;font-weight:700':''}" ></td>
+      <td><input class="set-inp" type="number" value="${s.r}" step="1" inputmode="numeric" data-i="${i}" data-j="${j}" data-k="r" style="${s.done?'color:#22c55e;font-weight:700':''}" ></td>
       <td><button onclick="cycleRPE(${i},${j})" style="background:none;border:1.5px solid ${rpe?rpeColors[rpe]:'var(--border)'};color:${rpe?rpeColors[rpe]:'var(--text3)'};border-radius:8px;padding:2px 5px;font-size:11px;font-weight:700;cursor:pointer;min-width:28px">${rpe||'—'}</button></td>
       <td><button class="done-btn${s.done?' done':''}" onclick="toggleSet(${i},${j})">${s.done?'&#10003;':'&#9675;'}</button></td>
       <td><button onclick="deleteSet(${i},${j})" style="width:28px;height:28px;border-radius:6px;border:none;background:var(--red-bg);color:var(--red-dark);font-size:15px;font-weight:700;cursor:pointer;display:flex;align-items:center;justify-content:center;line-height:1">×</button></td>
@@ -1880,7 +1890,7 @@ function bindSetInputs(ex,i){
       const bwNow=state.calProfile.wt||75;
       const set=state.exercises[ii].sets[jj];
       const exNow=state.exercises[ii];
-      const newKcal=calcSetCalories(exNow.name,set.w,Math.max(1,set.r),bwNow,exNow.met);
+      const newKcal=calcSetCalories(exNow.name,set.w,Math.max(1,set.r),bwNow,exNow.met,exNow.kcalPerRep||0);
       const kcalCell=document.getElementById(`set-kcal-${ii}-${jj}`);
       if(kcalCell) kcalCell.innerHTML=`${newKcal}<span style="font-size:9px;font-weight:500;color:var(--text3)"> kcal</span>`;
       document.getElementById('wk-kcal').textContent=calcLiveCalories();
@@ -1903,12 +1913,16 @@ function deleteExercise(i){if(!confirm('Remove "'+state.exercises[i].name+'" fro
 function addCustomExercise(){
   const nameEl=document.getElementById('custom-ex-name');
   const muscleEl=document.getElementById('custom-ex-muscle');
+  const kcalEl=document.getElementById('custom-ex-kcal');
   const name=nameEl.value.trim();
   if(!name){nameEl.focus();nameEl.style.borderColor='var(--red)';return;}
   nameEl.style.borderColor='';
   const muscle=muscleEl.value;
   const metDefaults={Chest:7,Back:7,Shoulders:6,Biceps:4.5,Triceps:4.5,Legs:8,Glutes:6,Hamstrings:6,Calves:4,Abs:4.5,Cardio:9,Forearms:3.5,Other:5};
   const met=metDefaults[muscle]||5;
+  // kcal per rep — stored on the exercise for use in calorie calc
+  const kcalPerRep=kcalEl?parseFloat(kcalEl.value)||0:0;
+
   const already=state.exercises.some(e=>e.name.toUpperCase()===name.toUpperCase());
   if(already){toast(name+' already in workout');return;}
 
@@ -1924,9 +1938,10 @@ function addCustomExercise(){
     ? last.sets.map(s=>({w:s.w,r:s.r,done:false}))
     : [{w:0,r:10,done:false},{w:0,r:10,done:false},{w:0,r:10,done:false}];
 
-  state.exercises.push({name:name.toUpperCase(),muscle,met,sets});
+  state.exercises.push({name:name.toUpperCase(),muscle,met,kcalPerRep,sets});
   state.expanded[state.exercises.length-1]=true;
   nameEl.value='';
+  if(kcalEl) kcalEl.value='';
   renderExercises();
   autoSave();
   closeLibrary();
@@ -1990,20 +2005,23 @@ function getExIntensity(name){
   return 'moderate';
 }
 
-function calcSetCalories(exName, weightKg, reps, bodyWeightKg, met){
+function calcSetCalories(exName, weightKg, reps, bodyWeightKg, met, kcalPerRep){
+  const r=Math.max(1,reps);
+
+  // If user specified kcal per rep — use it directly (most accurate)
+  if(kcalPerRep && kcalPerRep>0){
+    return Math.max(1, Math.round(kcalPerRep * r));
+  }
+
   const intensity=getExIntensity(exName);
   const metVal=met||MET_TABLE[intensity];
-  const r=Math.max(1,reps);
   const bw=Math.max(40,bodyWeightKg);
 
   // Time under tension: reps × ~4s per rep
   const setDurationHrs=(r*4)/3600;
 
   // Load factor: weight independently scales kcal
-  // bodyweight baseline = 1.0, each kg above 0 adds proportional effort
   const effectiveLoad=weightKg>0 ? weightKg : bw*0.6;
-  // loadFactor: heavier weight = more kcal even with same reps
-  // formula: 1 + (load / bodyweight) * 0.5, capped at 2.5x
   const loadFactor=Math.min(2.5, 1+(effectiveLoad/bw)*0.5);
 
   const fitMult=state.calProfile.fit==='beginner'?1.1:state.calProfile.fit==='advanced'?0.88:1.0;
@@ -2011,8 +2029,7 @@ function calcSetCalories(exName, weightKg, reps, bodyWeightKg, met){
   // Base kcal from MET × bodyWeight × duration × loadFactor
   const base=metVal * bw * setDurationHrs * loadFactor * fitMult;
 
-  // Extra weight bonus: heavier sets burn more even if reps stay same
-  // adds ~0.015 kcal per kg per rep (accounts for greater muscular tension)
+  // Extra weight bonus
   const weightBonus=effectiveLoad * r * 0.015;
 
   return Math.max(1, Math.round(base + weightBonus));
@@ -4852,6 +4869,186 @@ const FOOD_DB = [
   {name:'Sugar (1 tsp)',cat:'Condiments',kcal:16,protein:0,carbs:4.2,fat:0,fibre:0,ca:0,fe:0,vitC:0,vitA:0,zinc:0,potassium:0,b1:0,b2:0,b3:0},
   {name:'Honey (1 tbsp)',cat:'Condiments',kcal:64,protein:0.1,carbs:17.3,fat:0,fibre:0,ca:1,fe:0.1,vitC:0,vitA:0,zinc:0.1,potassium:11,b1:0,b2:0.01,b3:0.1},
   {name:'Coconut (fresh grated, 30g)',cat:'Condiments',kcal:106,protein:1.0,carbs:4.5,fat:10.0,fibre:2.7,ca:6,fe:0.8,vitC:1,vitA:0,zinc:0.3,potassium:118,b1:0.02,b2:0.01,b3:0.2},
+
+  // ── SOUTH INDIAN BREAKFAST ────────────────────────────────────────────────
+  {name:'Idli (plain, 1 piece)',cat:'South Indian',kcal:58,protein:1.9,carbs:11.1,fat:0.4,fibre:0.3,ca:10,fe:0.8,vitC:0,vitA:0,zinc:0.3,potassium:65,b1:0.03,b2:0.03,b3:0.5,pieceG:40,pieceLabel:'1 idli (40g)'},
+  {name:'Masala Dosa',cat:'South Indian',kcal:168,protein:4.5,carbs:26.0,fat:5.5,fibre:1.8,ca:28,fe:1.2,vitC:8,vitA:15,zinc:0.5,potassium:180,b1:0.10,b2:0.06,b3:1.2,pieceG:150,pieceLabel:'1 masala dosa (150g)'},
+  {name:'Rava Dosa',cat:'South Indian',kcal:195,protein:4.2,carbs:30.5,fat:6.8,fibre:0.8,ca:20,fe:0.9,vitC:0,vitA:0,zinc:0.4,potassium:90,b1:0.08,b2:0.04,b3:0.9,pieceG:120,pieceLabel:'1 rava dosa (120g)'},
+  {name:'Set Dosa (1 piece)',cat:'South Indian',kcal:90,protein:2.5,carbs:14.5,fat:2.8,fibre:0.5,ca:18,fe:0.7,vitC:0,vitA:0,zinc:0.3,potassium:80,b1:0.05,b2:0.03,b3:0.6,pieceG:80,pieceLabel:'1 set dosa (80g)'},
+  {name:'Pesarattu (green moong dosa)',cat:'South Indian',kcal:145,protein:7.5,carbs:22.0,fat:2.5,fibre:2.8,ca:30,fe:2.0,vitC:5,vitA:5,zinc:0.9,potassium:200,b1:0.20,b2:0.08,b3:1.0,pieceG:100,pieceLabel:'1 pesarattu (100g)'},
+  {name:'Upma (rava/semolina)',cat:'South Indian',kcal:160,protein:4.0,carbs:26.0,fat:5.0,fibre:1.2,ca:18,fe:1.0,vitC:2,vitA:30,zinc:0.5,potassium:140,b1:0.08,b2:0.04,b3:1.0},
+  {name:'Pongal (ven pongal)',cat:'South Indian',kcal:180,protein:5.2,carbs:30.0,fat:4.5,fibre:1.5,ca:25,fe:1.0,vitC:0,vitA:0,zinc:0.7,potassium:180,b1:0.08,b2:0.05,b3:0.9},
+  {name:'Sweet Pongal (sakkarai pongal)',cat:'South Indian',kcal:220,protein:4.0,carbs:40.0,fat:5.0,fibre:0.8,ca:30,fe:0.8,vitC:0,vitA:0,zinc:0.5,potassium:120,b1:0.05,b2:0.04,b3:0.6},
+  {name:'Vada (medu vada, 1 piece)',cat:'South Indian',kcal:105,protein:3.2,carbs:11.5,fat:5.2,fibre:1.0,ca:20,fe:0.8,vitC:0,vitA:0,zinc:0.5,potassium:90,b1:0.06,b2:0.03,b3:0.4,pieceG:50,pieceLabel:'1 medu vada (50g)'},
+  {name:'Rava Idli (1 piece)',cat:'South Indian',kcal:72,protein:2.5,carbs:12.5,fat:1.8,fibre:0.5,ca:25,fe:0.6,vitC:2,vitA:5,zinc:0.3,potassium:80,b1:0.04,b2:0.03,b3:0.5,pieceG:50,pieceLabel:'1 rava idli (50g)'},
+  {name:'Paniyaram (kuzhi paniyaram)',cat:'South Indian',kcal:95,protein:2.8,carbs:14.0,fat:3.5,fibre:0.5,ca:18,fe:0.7,vitC:0,vitA:0,zinc:0.3,potassium:70,b1:0.04,b2:0.03,b3:0.4,pieceG:40,pieceLabel:'1 paniyaram (40g)'},
+  {name:'Appam (plain)',cat:'South Indian',kcal:117,protein:2.5,carbs:22.5,fat:1.8,fibre:0.4,ca:10,fe:0.5,vitC:0,vitA:0,zinc:0.3,potassium:60,b1:0.03,b2:0.02,b3:0.4,pieceG:80,pieceLabel:'1 appam (80g)'},
+  {name:'Puttu (rice puttu)',cat:'South Indian',kcal:208,protein:4.0,carbs:43.0,fat:1.5,fibre:1.2,ca:15,fe:0.6,vitC:0,vitA:0,zinc:0.5,potassium:90,b1:0.05,b2:0.02,b3:0.5},
+  {name:'Idiyappam (string hoppers)',cat:'South Indian',kcal:175,protein:3.0,carbs:38.5,fat:0.5,fibre:0.5,ca:8,fe:0.3,vitC:0,vitA:0,zinc:0.2,potassium:40,b1:0.02,b2:0.01,b3:0.3},
+  {name:'Kichadi (curd rice base)',cat:'South Indian',kcal:115,protein:2.8,carbs:20.0,fat:2.5,fibre:0.3,ca:80,fe:0.2,vitC:0,vitA:5,zinc:0.3,potassium:100,b1:0.03,b2:0.08,b3:0.2},
+
+  // ── SOUTH INDIAN MAIN MEALS ───────────────────────────────────────────────
+  {name:'Sambar (dal-vegetable curry)',cat:'South Indian',kcal:85,protein:4.5,carbs:14.0,fat:2.0,fibre:3.5,ca:50,fe:1.5,vitC:15,vitA:30,zinc:0.6,potassium:350,b1:0.08,b2:0.06,b3:0.8},
+  {name:'Rasam (pepper soup)',cat:'South Indian',kcal:35,protein:1.5,carbs:6.5,fat:1.0,fibre:0.8,ca:20,fe:0.5,vitC:10,vitA:15,zinc:0.2,potassium:200,b1:0.03,b2:0.02,b3:0.3},
+  {name:'Curd Rice (thayir sadam)',cat:'South Indian',kcal:145,protein:4.2,carbs:25.0,fat:3.5,fibre:0.2,ca:120,fe:0.2,vitC:0,vitA:10,zinc:0.5,potassium:150,b1:0.03,b2:0.12,b3:0.2},
+  {name:'Bisibelebath',cat:'South Indian',kcal:160,protein:5.5,carbs:28.0,fat:3.5,fibre:3.0,ca:40,fe:1.5,vitC:5,vitA:20,zinc:0.7,potassium:280,b1:0.10,b2:0.06,b3:0.9},
+  {name:'Tamarind Rice (puliyodarai)',cat:'South Indian',kcal:195,protein:3.5,carbs:35.0,fat:5.5,fibre:1.5,ca:15,fe:1.8,vitC:2,vitA:5,zinc:0.4,potassium:120,b1:0.05,b2:0.03,b3:0.5},
+  {name:'Lemon Rice (chitranna)',cat:'South Indian',kcal:185,protein:3.2,carbs:32.0,fat:5.5,fibre:0.8,ca:10,fe:0.5,vitC:8,vitA:0,zinc:0.4,potassium:100,b1:0.05,b2:0.03,b3:0.5},
+  {name:'Coconut Rice',cat:'South Indian',kcal:210,protein:3.5,carbs:33.0,fat:7.5,fibre:1.5,ca:12,fe:0.6,vitC:0,vitA:0,zinc:0.4,potassium:110,b1:0.04,b2:0.02,b3:0.4},
+  {name:'Tomato Rice',cat:'South Indian',kcal:180,protein:3.8,carbs:30.0,fat:5.0,fibre:1.8,ca:20,fe:0.8,vitC:15,vitA:35,zinc:0.5,potassium:200,b1:0.06,b2:0.04,b3:0.7},
+  {name:'Vangi Bath (brinjal rice)',cat:'South Indian',kcal:190,protein:3.5,carbs:32.0,fat:5.5,fibre:2.5,ca:18,fe:0.7,vitC:3,vitA:5,zinc:0.4,potassium:180,b1:0.05,b2:0.03,b3:0.5},
+  {name:'Kerala Fish Curry',cat:'South Indian',kcal:165,protein:16.0,carbs:5.0,fat:9.0,fibre:1.5,ca:40,fe:1.5,vitC:5,vitA:25,zinc:1.0,potassium:350,b1:0.08,b2:0.12,b3:5.0},
+  {name:'Prawn Masala (Andhra style)',cat:'South Indian',kcal:145,protein:18.0,carbs:5.5,fat:6.0,fibre:1.0,ca:75,fe:2.0,vitC:8,vitA:20,zinc:1.5,potassium:280,b1:0.05,b2:0.06,b3:3.0},
+  {name:'Chicken Chettinad',cat:'South Indian',kcal:195,protein:20.0,carbs:5.0,fat:11.0,fibre:1.5,ca:35,fe:2.0,vitC:5,vitA:30,zinc:2.0,potassium:320,b1:0.10,b2:0.18,b3:7.5},
+  {name:'Meen Kulambu (fish kuzhambu)',cat:'South Indian',kcal:130,protein:13.0,carbs:6.0,fat:6.0,fibre:1.5,ca:50,fe:1.8,vitC:8,vitA:20,zinc:0.9,potassium:300,b1:0.05,b2:0.10,b3:4.0},
+  {name:'Kootu (mixed vegetable)',cat:'South Indian',kcal:95,protein:4.0,carbs:12.0,fat:3.5,fibre:3.5,ca:55,fe:1.5,vitC:12,vitA:25,zinc:0.7,potassium:260,b1:0.08,b2:0.06,b3:0.7},
+  {name:'Avial (mixed veg with coconut)',cat:'South Indian',kcal:120,protein:3.0,carbs:12.0,fat:7.0,fibre:3.5,ca:45,fe:1.0,vitC:20,vitA:60,zinc:0.5,potassium:280,b1:0.07,b2:0.05,b3:0.6},
+  {name:'Olan (ash gourd coconut milk)',cat:'South Indian',kcal:95,protein:2.0,carbs:8.0,fat:6.0,fibre:1.5,ca:20,fe:0.5,vitC:5,vitA:5,zinc:0.3,potassium:180,b1:0.03,b2:0.02,b3:0.3},
+  {name:'Keerai Masiyal (spinach mash)',cat:'South Indian',kcal:65,protein:3.5,carbs:6.0,fat:3.0,fibre:2.5,ca:110,fe:2.5,vitC:25,vitA:400,zinc:0.6,potassium:400,b1:0.07,b2:0.15,b3:0.6},
+  {name:'Moringa Sambar (drumstick)',cat:'South Indian',kcal:75,protein:4.0,carbs:10.0,fat:1.5,fibre:3.5,ca:45,fe:1.2,vitC:100,vitA:8,zinc:0.5,potassium:380,b1:0.07,b2:0.07,b3:0.8},
+  {name:'Paruppu Usili (dal with veg)',cat:'South Indian',kcal:155,protein:8.5,carbs:16.0,fat:6.0,fibre:5.0,ca:55,fe:2.5,vitC:8,vitA:10,zinc:1.2,potassium:300,b1:0.15,b2:0.08,b3:1.0},
+
+  // ── SOUTH INDIAN CHUTNEYS & CONDIMENTS ───────────────────────────────────
+  {name:'Coconut Chutney',cat:'South Indian',kcal:145,protein:1.5,carbs:5.5,fat:13.5,fibre:2.5,ca:10,fe:1.0,vitC:2,vitA:0,zinc:0.4,potassium:120,b1:0.03,b2:0.01,b3:0.3},
+  {name:'Tomato Chutney',cat:'South Indian',kcal:65,protein:1.5,carbs:8.0,fat:3.0,fibre:1.5,ca:15,fe:0.5,vitC:18,vitA:40,zinc:0.2,potassium:220,b1:0.04,b2:0.03,b3:0.5},
+  {name:'Peanut Chutney',cat:'South Indian',kcal:180,protein:6.0,carbs:8.0,fat:14.0,fibre:2.5,ca:25,fe:0.8,vitC:0,vitA:0,zinc:0.8,potassium:180,b1:0.08,b2:0.04,b3:3.0},
+  {name:'Mint-Coriander Chutney',cat:'South Indian',kcal:40,protein:2.0,carbs:5.5,fat:1.0,fibre:2.5,ca:60,fe:2.0,vitC:28,vitA:280,zinc:0.4,potassium:400,b1:0.06,b2:0.12,b3:0.8},
+  {name:'Idli Podi (gun powder)',cat:'South Indian',kcal:350,protein:15.0,carbs:45.0,fat:12.0,fibre:8.0,ca:80,fe:5.0,vitC:0,vitA:20,zinc:2.0,potassium:400,b1:0.30,b2:0.15,b3:2.0},
+
+  // ── SOUTH INDIAN SNACKS & STREET FOOD ────────────────────────────────────
+  {name:'Murukku (chakli)',cat:'South Indian',kcal:490,protein:8.0,carbs:60.0,fat:23.0,fibre:2.5,ca:30,fe:2.5,vitC:0,vitA:0,zinc:0.8,potassium:150,b1:0.08,b2:0.04,b3:0.8},
+  {name:'Mixture (South Indian)',cat:'South Indian',kcal:465,protein:9.0,carbs:55.0,fat:22.0,fibre:3.0,ca:35,fe:2.0,vitC:0,vitA:0,zinc:0.7,potassium:180,b1:0.10,b2:0.05,b3:1.0},
+  {name:'Ribbon Pakoda',cat:'South Indian',kcal:510,protein:7.5,carbs:58.0,fat:27.0,fibre:2.0,ca:25,fe:2.0,vitC:0,vitA:0,zinc:0.6,potassium:120,b1:0.07,b2:0.04,b3:0.7},
+  {name:'Bonda (potato, 1 piece)',cat:'South Indian',kcal:130,protein:2.5,carbs:17.0,fat:6.0,fibre:1.5,ca:15,fe:0.6,vitC:5,vitA:5,zinc:0.3,potassium:180,b1:0.05,b2:0.03,b3:0.5,pieceG:60,pieceLabel:'1 bonda (60g)'},
+  {name:'Bajji (mirchi / chilli)',cat:'South Indian',kcal:148,protein:2.8,carbs:18.0,fat:7.0,fibre:2.0,ca:20,fe:0.8,vitC:30,vitA:30,zinc:0.4,potassium:150,b1:0.05,b2:0.03,b3:0.5,pieceG:50,pieceLabel:'1 bajji (50g)'},
+  {name:'Sundal (chickpea, 1 cup)',cat:'South Indian',kcal:185,protein:8.0,carbs:28.0,fat:4.5,fibre:7.5,ca:55,fe:3.0,vitC:3,vitA:5,zinc:1.5,potassium:290,b1:0.15,b2:0.07,b3:0.6},
+  {name:'Vadai Curry',cat:'South Indian',kcal:210,protein:7.0,carbs:22.0,fat:11.0,fibre:3.5,ca:60,fe:2.0,vitC:8,vitA:25,zinc:0.9,potassium:280,b1:0.10,b2:0.07,b3:0.8},
+  {name:'Mysore Bonda',cat:'South Indian',kcal:175,protein:5.0,carbs:22.0,fat:7.5,fibre:1.5,ca:30,fe:1.2,vitC:0,vitA:0,zinc:0.6,potassium:130,b1:0.08,b2:0.05,b3:0.6,pieceG:60,pieceLabel:'1 mysore bonda (60g)'},
+
+  // ── SOUTH INDIAN SWEETS & DESSERTS ───────────────────────────────────────
+  {name:'Payasam / Kheer (rice)',cat:'South Indian',kcal:155,protein:3.5,carbs:26.0,fat:5.0,fibre:0.3,ca:110,fe:0.3,vitC:0,vitA:30,zinc:0.5,potassium:140,b1:0.04,b2:0.14,b3:0.2},
+  {name:'Semiya Payasam (vermicelli)',cat:'South Indian',kcal:165,protein:4.0,carbs:28.0,fat:5.0,fibre:0.4,ca:100,fe:0.4,vitC:0,vitA:25,zinc:0.4,potassium:130,b1:0.05,b2:0.12,b3:0.3},
+  {name:'Paal Payasam (milk payasam)',cat:'South Indian',kcal:175,protein:4.5,carbs:30.0,fat:5.0,fibre:0.1,ca:130,fe:0.2,vitC:0,vitA:35,zinc:0.5,potassium:160,b1:0.04,b2:0.16,b3:0.2},
+  {name:'Mysore Pak',cat:'South Indian',kcal:480,protein:7.0,carbs:55.0,fat:26.0,fibre:2.5,ca:40,fe:2.0,vitC:0,vitA:0,zinc:0.8,potassium:180,b1:0.10,b2:0.06,b3:0.6},
+  {name:'Adhirasam',cat:'South Indian',kcal:395,protein:4.5,carbs:70.0,fat:12.0,fibre:1.5,ca:20,fe:2.5,vitC:0,vitA:0,zinc:0.5,potassium:150,b1:0.03,b2:0.03,b3:0.5},
+  {name:'Kozhukattai (modak)',cat:'South Indian',kcal:195,protein:3.0,carbs:35.0,fat:5.5,fibre:2.0,ca:15,fe:0.8,vitC:0,vitA:0,zinc:0.3,potassium:90,b1:0.03,b2:0.02,b3:0.3,pieceG:60,pieceLabel:'1 kozhukattai (60g)'},
+  {name:'Poli (puran poli / bobbattu)',cat:'South Indian',kcal:310,protein:7.0,carbs:52.0,fat:9.0,fibre:3.0,ca:50,fe:2.0,vitC:0,vitA:0,zinc:0.8,potassium:160,b1:0.12,b2:0.07,b3:0.8,pieceG:80,pieceLabel:'1 poli (80g)'},
+  {name:'Chakkara Pongal (sweet)',cat:'South Indian',kcal:230,protein:4.0,carbs:42.0,fat:5.5,fibre:1.0,ca:30,fe:0.8,vitC:0,vitA:0,zinc:0.5,potassium:120,b1:0.05,b2:0.04,b3:0.6},
+  {name:'Banana Halwa (kela halwa)',cat:'South Indian',kcal:215,protein:1.5,carbs:42.0,fat:6.0,fibre:1.5,ca:8,fe:0.4,vitC:6,vitA:5,zinc:0.2,potassium:280,b1:0.03,b2:0.05,b3:0.5},
+
+  // ── ANDHRA / TELANGANA SPECIALS ───────────────────────────────────────────
+  {name:'Pesarattu with Upma',cat:'South Indian',kcal:240,protein:8.5,carbs:38.0,fat:6.0,fibre:3.5,ca:35,fe:2.5,vitC:3,vitA:20,zinc:1.0,potassium:250,b1:0.18,b2:0.08,b3:1.2},
+  {name:'Gongura Mutton',cat:'South Indian',kcal:220,protein:22.0,carbs:5.0,fat:13.0,fibre:2.0,ca:45,fe:4.0,vitC:20,vitA:50,zinc:4.0,potassium:380,b1:0.12,b2:0.22,b3:5.0},
+  {name:'Gongura Pachadi (chutney)',cat:'South Indian',kcal:80,protein:2.0,carbs:8.0,fat:4.5,fibre:3.0,ca:80,fe:3.5,vitC:35,vitA:60,zinc:0.5,potassium:350,b1:0.08,b2:0.10,b3:0.8},
+  {name:'Pulihora (Andhra tamarind rice)',cat:'South Indian',kcal:190,protein:3.5,carbs:33.0,fat:5.5,fibre:1.5,ca:15,fe:1.8,vitC:2,vitA:5,zinc:0.5,potassium:130,b1:0.05,b2:0.03,b3:0.5},
+  {name:'Gutti Vankaya (stuffed brinjal)',cat:'South Indian',kcal:135,protein:3.0,carbs:12.0,fat:8.5,fibre:4.0,ca:30,fe:1.0,vitC:5,vitA:5,zinc:0.5,potassium:250,b1:0.07,b2:0.05,b3:0.7},
+  {name:'Majjiga Pulusu (buttermilk curry)',cat:'South Indian',kcal:55,protein:2.5,carbs:5.0,fat:2.5,fibre:1.0,ca:90,fe:0.3,vitC:5,vitA:10,zinc:0.4,potassium:160,b1:0.03,b2:0.10,b3:0.2},
+  {name:'Perugu Pachadi (raita Andhra)',cat:'South Indian',kcal:70,protein:2.8,carbs:5.0,fat:4.0,fibre:0.8,ca:110,fe:0.2,vitC:3,vitA:15,zinc:0.4,potassium:175,b1:0.03,b2:0.12,b3:0.2},
+
+  // ── KERALA SPECIALS ───────────────────────────────────────────────────────
+  {name:'Kerala Parotta',cat:'South Indian',kcal:295,protein:7.5,carbs:46.0,fat:9.5,fibre:1.2,ca:25,fe:1.5,vitC:0,vitA:0,zinc:0.7,potassium:100,b1:0.12,b2:0.07,b3:1.3,pieceG:90,pieceLabel:'1 parotta (90g)'},
+  {name:'Kerala Chicken Curry',cat:'South Indian',kcal:185,protein:18.0,carbs:6.0,fat:10.0,fibre:1.5,ca:30,fe:1.8,vitC:8,vitA:30,zinc:2.0,potassium:340,b1:0.10,b2:0.18,b3:7.0},
+  {name:'Kerala Fish Molee',cat:'South Indian',kcal:155,protein:15.0,carbs:4.0,fat:9.0,fibre:1.0,ca:35,fe:1.2,vitC:5,vitA:15,zinc:0.8,potassium:310,b1:0.05,b2:0.10,b3:4.5},
+  {name:'Kadala Curry (black chickpea)',cat:'South Indian',kcal:155,protein:8.5,carbs:22.0,fat:4.0,fibre:7.5,ca:50,fe:3.5,vitC:5,vitA:10,zinc:1.5,potassium:380,b1:0.18,b2:0.08,b3:0.8},
+  {name:'Erissery (pumpkin coconut)',cat:'South Indian',kcal:145,protein:4.0,carbs:16.0,fat:7.5,fibre:4.0,ca:30,fe:1.5,vitC:10,vitA:350,zinc:0.5,potassium:320,b1:0.06,b2:0.07,b3:0.6},
+  {name:'Thoran (stir-fry with coconut)',cat:'South Indian',kcal:120,protein:3.0,carbs:10.0,fat:8.0,fibre:4.5,ca:40,fe:1.2,vitC:18,vitA:40,zinc:0.4,potassium:250,b1:0.07,b2:0.05,b3:0.5},
+  {name:'Sadya Rice Plate (full sadya)',cat:'South Indian',kcal:680,protein:18.0,carbs:110.0,fat:18.0,fibre:12.0,ca:180,fe:5.0,vitC:30,vitA:120,zinc:2.5,potassium:900,b1:0.30,b2:0.30,b3:3.5},
+
+  // ── TAMIL SPECIALS ────────────────────────────────────────────────────────
+  {name:'Kuzhi Paniyaram (spicy)',cat:'South Indian',kcal:110,protein:3.5,carbs:15.0,fat:4.0,fibre:0.8,ca:20,fe:0.8,vitC:2,vitA:5,zinc:0.4,potassium:90,b1:0.04,b2:0.03,b3:0.5,pieceG:35,pieceLabel:'1 paniyaram (35g)'},
+  {name:'Keerai Kootu (greens lentil)',cat:'South Indian',kcal:110,protein:6.0,carbs:14.0,fat:3.5,fibre:4.0,ca:90,fe:3.0,vitC:20,vitA:380,zinc:0.8,potassium:420,b1:0.10,b2:0.14,b3:0.8},
+  {name:'Poriyal (dry veg stir-fry)',cat:'South Indian',kcal:90,protein:2.5,carbs:10.0,fat:4.5,fibre:3.5,ca:35,fe:1.0,vitC:15,vitA:30,zinc:0.4,potassium:220,b1:0.06,b2:0.04,b3:0.5},
+  {name:'Chettinad Egg Curry',cat:'South Indian',kcal:180,protein:10.0,carbs:5.0,fat:13.5,fibre:1.5,ca:55,fe:2.0,vitC:5,vitA:100,zinc:1.2,potassium:200,b1:0.07,b2:0.30,b3:0.5},
+  {name:'Kothu Parotta',cat:'South Indian',kcal:310,protein:12.0,carbs:42.0,fat:11.0,fibre:2.0,ca:40,fe:2.0,vitC:5,vitA:20,zinc:1.2,potassium:250,b1:0.12,b2:0.14,b3:3.0},
+  {name:'Idli Upma (crumbled idli)',cat:'South Indian',kcal:140,protein:3.5,carbs:22.0,fat:4.5,fibre:1.0,ca:20,fe:1.5,vitC:3,vitA:10,zinc:0.4,potassium:150,b1:0.05,b2:0.04,b3:0.7},
+  {name:'Pori Urundai (puffed rice balls)',cat:'South Indian',kcal:195,protein:2.5,carbs:42.0,fat:2.5,fibre:0.8,ca:15,fe:2.0,vitC:0,vitA:0,zinc:0.4,potassium:80,b1:0.03,b2:0.02,b3:0.5,pieceG:30,pieceLabel:'1 urundai (30g)'},
+  {name:'Nei Payasam (ghee payasam)',cat:'South Indian',kcal:280,protein:3.5,carbs:48.0,fat:9.0,fibre:0.5,ca:60,fe:1.5,vitC:0,vitA:50,zinc:0.5,potassium:100,b1:0.04,b2:0.08,b3:0.3},
+  {name:'Athirasam',cat:'South Indian',kcal:380,protein:5.0,carbs:65.0,fat:11.0,fibre:1.5,ca:25,fe:3.0,vitC:0,vitA:0,zinc:0.6,potassium:160,b1:0.04,b2:0.04,b3:0.6,pieceG:50,pieceLabel:'1 athirasam (50g)'},
+
+  // ── Karnataka SPECIALS ────────────────────────────────────────────────────
+  {name:'Akki Roti (rice flour roti)',cat:'South Indian',kcal:175,protein:2.5,carbs:34.0,fat:3.5,fibre:0.5,ca:10,fe:0.5,vitC:0,vitA:0,zinc:0.3,potassium:60,b1:0.02,b2:0.01,b3:0.3,pieceG:70,pieceLabel:'1 akki roti (70g)'},
+  {name:'Neer Dosa',cat:'South Indian',kcal:95,protein:2.0,carbs:18.5,fat:1.5,fibre:0.3,ca:8,fe:0.3,vitC:0,vitA:0,zinc:0.2,potassium:50,b1:0.02,b2:0.01,b3:0.3,pieceG:60,pieceLabel:'1 neer dosa (60g)'},
+  {name:'Jolada Roti (jowar roti)',cat:'South Indian',kcal:165,protein:5.0,carbs:32.0,fat:1.8,fibre:2.0,ca:18,fe:2.5,vitC:0,vitA:0,zinc:0.8,potassium:180,b1:0.18,b2:0.07,b3:1.5,pieceG:60,pieceLabel:'1 jolada roti (60g)'},
+  {name:'Saaru (Karnataka rasam)',cat:'South Indian',kcal:40,protein:1.8,carbs:7.0,fat:1.0,fibre:1.0,ca:25,fe:0.6,vitC:12,vitA:18,zinc:0.2,potassium:220,b1:0.04,b2:0.03,b3:0.4},
+  {name:'Huuli (Karnataka sambar)',cat:'South Indian',kcal:80,protein:4.0,carbs:12.0,fat:1.8,fibre:3.0,ca:45,fe:1.2,vitC:12,vitA:25,zinc:0.5,potassium:300,b1:0.07,b2:0.05,b3:0.7},
+  {name:'Kadubu (steamed dumpling)',cat:'South Indian',kcal:165,protein:3.5,carbs:30.0,fat:4.0,fibre:1.5,ca:15,fe:0.6,vitC:0,vitA:0,zinc:0.3,potassium:80,b1:0.03,b2:0.02,b3:0.4,pieceG:70,pieceLabel:'1 kadubu (70g)'},
+
+  // ── BIRYANIS ──────────────────────────────────────────────────────────────
+  {name:'Hyderabadi Chicken Biryani',cat:'South Indian',kcal:185,protein:12.0,carbs:22.0,fat:6.0,fibre:1.0,ca:30,fe:1.5,vitC:3,vitA:20,zinc:1.5,potassium:280,b1:0.08,b2:0.12,b3:4.0},
+  {name:'Hyderabadi Mutton Biryani',cat:'South Indian',kcal:210,protein:14.0,carbs:22.0,fat:8.5,fibre:1.0,ca:30,fe:2.5,vitC:2,vitA:15,zinc:3.0,potassium:300,b1:0.10,b2:0.15,b3:5.0},
+  {name:'Veg Biryani (South Indian)',cat:'South Indian',kcal:150,protein:4.0,carbs:26.0,fat:4.5,fibre:2.5,ca:30,fe:1.0,vitC:8,vitA:30,zinc:0.6,potassium:200,b1:0.08,b2:0.05,b3:0.8},
+  {name:'Ambur Chicken Biryani',cat:'South Indian',kcal:195,protein:13.0,carbs:23.0,fat:6.5,fibre:1.0,ca:35,fe:1.8,vitC:5,vitA:20,zinc:1.8,potassium:290,b1:0.08,b2:0.14,b3:4.5},
+  {name:'Dindigul Biryani',cat:'South Indian',kcal:200,protein:13.0,carbs:22.0,fat:7.0,fibre:1.0,ca:30,fe:1.8,vitC:3,vitA:15,zinc:1.8,potassium:285,b1:0.08,b2:0.13,b3:4.5},
+  {name:'Malabar Chicken Biryani',cat:'South Indian',kcal:205,protein:13.5,carbs:24.0,fat:7.0,fibre:1.5,ca:40,fe:2.0,vitC:5,vitA:25,zinc:1.8,potassium:300,b1:0.10,b2:0.15,b3:5.0},
+  {name:'Thalassery Biryani',cat:'South Indian',kcal:195,protein:12.0,carbs:25.0,fat:6.5,fibre:1.5,ca:40,fe:2.0,vitC:5,vitA:25,zinc:1.8,potassium:290,b1:0.10,b2:0.14,b3:4.5},
+  {name:'Egg Biryani',cat:'South Indian',kcal:175,protein:8.0,carbs:24.0,fat:6.0,fibre:1.0,ca:35,fe:1.5,vitC:2,vitA:60,zinc:1.0,potassium:200,b1:0.07,b2:0.18,b3:1.0},
+  {name:'Prawn Biryani',cat:'South Indian',kcal:185,protein:14.0,carbs:22.0,fat:5.5,fibre:1.0,ca:60,fe:1.8,vitC:3,vitA:10,zinc:1.5,potassium:270,b1:0.06,b2:0.08,b3:3.5},
+  {name:'Mushroom Biryani',cat:'South Indian',kcal:155,protein:5.0,carbs:25.0,fat:4.5,fibre:2.5,ca:20,fe:1.2,vitC:3,vitA:5,zinc:0.8,potassium:280,b1:0.08,b2:0.15,b3:2.5},
+
+  // ── HYDERABADI SPECIALS ───────────────────────────────────────────────────
+  {name:'Mirchi ka Salan',cat:'South Indian',kcal:120,protein:3.0,carbs:8.0,fat:9.0,fibre:2.5,ca:40,fe:1.0,vitC:50,vitA:30,zinc:0.5,potassium:220,b1:0.06,b2:0.05,b3:0.8},
+  {name:'Bagara Baingan (Hyderabadi)',cat:'South Indian',kcal:130,protein:3.0,carbs:10.0,fat:9.5,fibre:3.5,ca:40,fe:1.0,vitC:8,vitA:10,zinc:0.5,potassium:260,b1:0.07,b2:0.05,b3:0.7},
+  {name:'Haleem (Hyderabadi)',cat:'South Indian',kcal:185,protein:14.0,carbs:15.0,fat:8.0,fibre:2.5,ca:40,fe:3.5,vitC:3,vitA:15,zinc:3.0,potassium:290,b1:0.12,b2:0.16,b3:4.0},
+  {name:'Lukhmi (Hyderabadi samosa)',cat:'South Indian',kcal:260,protein:8.0,carbs:28.0,fat:13.0,fibre:1.5,ca:25,fe:1.5,vitC:2,vitA:10,zinc:1.0,potassium:150,b1:0.10,b2:0.08,b3:2.0,pieceG:80,pieceLabel:'1 lukhmi (80g)'},
+  {name:'Sheer Khurma',cat:'South Indian',kcal:195,protein:5.0,carbs:28.0,fat:8.0,fibre:0.5,ca:140,fe:0.5,vitC:0,vitA:40,zinc:0.5,potassium:200,b1:0.04,b2:0.16,b3:0.2},
+  {name:'Double ka Meetha',cat:'South Indian',kcal:285,protein:6.0,carbs:40.0,fat:12.0,fibre:0.5,ca:130,fe:0.6,vitC:0,vitA:35,zinc:0.4,potassium:150,b1:0.04,b2:0.15,b3:0.2},
+  {name:'Haleem (mutton)',cat:'South Indian',kcal:195,protein:15.5,carbs:15.0,fat:8.5,fibre:2.5,ca:40,fe:4.0,vitC:3,vitA:15,zinc:4.0,potassium:310,b1:0.12,b2:0.18,b3:5.0},
+  {name:'Punugulu (rice batter fritters)',cat:'South Indian',kcal:285,protein:5.5,carbs:38.0,fat:12.5,fibre:1.0,ca:20,fe:1.0,vitC:0,vitA:0,zinc:0.5,potassium:80,b1:0.05,b2:0.04,b3:0.5,pieceG:15,pieceLabel:'1 punugulu (15g)'},
+  {name:'Uggani (puffed rice upma)',cat:'South Indian',kcal:155,protein:3.5,carbs:30.0,fat:4.0,fibre:1.0,ca:15,fe:1.5,vitC:5,vitA:5,zinc:0.4,potassium:120,b1:0.04,b2:0.03,b3:0.5},
+  {name:'Qubani ka Meetha',cat:'South Indian',kcal:165,protein:2.5,carbs:30.0,fat:4.5,fibre:2.5,ca:30,fe:1.5,vitC:2,vitA:80,zinc:0.3,potassium:280,b1:0.02,b2:0.04,b3:0.5},
+  {name:'Menthi Pappu (fenugreek dal)',cat:'South Indian',kcal:115,protein:7.5,carbs:16.0,fat:2.0,fibre:4.5,ca:45,fe:2.5,vitC:5,vitA:10,zinc:0.8,potassium:320,b1:0.15,b2:0.07,b3:1.0},
+  {name:'Tomato Pappu (tomato dal)',cat:'South Indian',kcal:105,protein:6.5,carbs:15.0,fat:1.8,fibre:3.0,ca:35,fe:1.8,vitC:18,vitA:40,zinc:0.7,potassium:300,b1:0.12,b2:0.06,b3:0.9},
+  {name:'Pesara Pappu (moong dal)',cat:'South Indian',kcal:110,protein:7.5,carbs:16.5,fat:1.5,fibre:4.0,ca:30,fe:1.8,vitC:3,vitA:5,zinc:0.9,potassium:270,b1:0.18,b2:0.08,b3:1.0},
+  {name:'Kandagadda Vepudu (yam fry)',cat:'South Indian',kcal:165,protein:2.5,carbs:25.0,fat:6.5,fibre:3.5,ca:15,fe:0.8,vitC:5,vitA:5,zinc:0.4,potassium:500,b1:0.08,b2:0.04,b3:0.8},
+
+  // ── KERALA SPECIALS ───────────────────────────────────────────────────────
+  {name:'Pathiri (rice flour bread)',cat:'South Indian',kcal:190,protein:3.5,carbs:38.5,fat:2.5,fibre:0.8,ca:10,fe:0.4,vitC:0,vitA:0,zinc:0.3,potassium:55,b1:0.02,b2:0.01,b3:0.3,pieceG:75,pieceLabel:'1 pathiri (75g)'},
+  {name:'Malabar Parotta',cat:'South Indian',kcal:310,protein:7.5,carbs:46.0,fat:10.5,fibre:1.2,ca:25,fe:1.5,vitC:0,vitA:0,zinc:0.7,potassium:100,b1:0.12,b2:0.07,b3:1.3,pieceG:90,pieceLabel:'1 parotta (90g)'},
+  {name:'Mutton Stew (Kerala)',cat:'South Indian',kcal:175,protein:15.0,carbs:8.0,fat:9.5,fibre:1.5,ca:30,fe:2.5,vitC:8,vitA:15,zinc:3.5,potassium:350,b1:0.10,b2:0.18,b3:4.0},
+  {name:'Beef Roast (Kerala style)',cat:'South Indian',kcal:235,protein:22.0,carbs:4.0,fat:15.0,fibre:1.5,ca:25,fe:3.0,vitC:5,vitA:10,zinc:4.5,potassium:360,b1:0.08,b2:0.20,b3:5.5},
+  {name:'Unni Appam',cat:'South Indian',kcal:165,protein:2.5,carbs:28.0,fat:5.5,fibre:1.5,ca:20,fe:1.5,vitC:0,vitA:0,zinc:0.3,potassium:120,b1:0.03,b2:0.03,b3:0.4,pieceG:35,pieceLabel:'1 unni appam (35g)'},
+  {name:'Pazham Pori (banana fritter)',cat:'South Indian',kcal:195,protein:2.5,carbs:32.0,fat:7.0,fibre:1.8,ca:12,fe:0.5,vitC:5,vitA:5,zinc:0.3,potassium:180,b1:0.03,b2:0.04,b3:0.5,pieceG:70,pieceLabel:'1 pazham pori (70g)'},
+  {name:'Meen Pollichathu (fish in leaf)',cat:'South Indian',kcal:160,protein:17.0,carbs:4.0,fat:8.5,fibre:1.5,ca:45,fe:1.5,vitC:8,vitA:30,zinc:1.0,potassium:330,b1:0.07,b2:0.12,b3:4.5},
+  {name:'Prawn Thenga Paal Curry',cat:'South Indian',kcal:155,protein:15.0,carbs:5.0,fat:9.0,fibre:1.0,ca:60,fe:1.8,vitC:5,vitA:15,zinc:1.5,potassium:280,b1:0.05,b2:0.07,b3:3.0},
+  {name:'Parippu Curry (Kerala dal)',cat:'South Indian',kcal:130,protein:6.5,carbs:17.0,fat:5.0,fibre:4.0,ca:40,fe:2.0,vitC:3,vitA:5,zinc:0.8,potassium:310,b1:0.12,b2:0.07,b3:0.9},
+  {name:'Chakka Varattiyathu (jackfruit jam)',cat:'South Indian',kcal:260,protein:1.5,carbs:58.0,fat:3.5,fibre:2.5,ca:15,fe:0.5,vitC:8,vitA:5,zinc:0.2,potassium:200,b1:0.04,b2:0.03,b3:0.4},
+  {name:'Kozhikodan Halwa',cat:'South Indian',kcal:320,protein:2.0,carbs:65.0,fat:8.0,fibre:0.5,ca:10,fe:1.0,vitC:0,vitA:0,zinc:0.2,potassium:80,b1:0.02,b2:0.02,b3:0.2},
+  {name:'Inji Curry (ginger pickle)',cat:'South Indian',kcal:95,protein:1.5,carbs:12.0,fat:4.5,fibre:2.0,ca:30,fe:1.2,vitC:5,vitA:5,zinc:0.3,potassium:220,b1:0.03,b2:0.02,b3:0.4},
+
+  // ── DRINKS & BEVERAGES ────────────────────────────────────────────────────
+  {name:'Filter Coffee (with milk & sugar)',cat:'South Indian',kcal:65,protein:2.5,carbs:8.5,fat:2.5,fibre:0,ca:80,fe:0.1,vitC:0,vitA:20,zinc:0.3,potassium:120,b1:0.02,b2:0.10,b3:0.5,pieceG:150,pieceLabel:'1 cup (150ml)'},
+  {name:'Buttermilk / Majjiga (spiced)',cat:'South Indian',kcal:30,protein:1.5,carbs:3.5,fat:0.8,fibre:0,ca:90,fe:0.1,vitC:0,vitA:10,zinc:0.3,potassium:130,b1:0.02,b2:0.10,b3:0.1,pieceG:200,pieceLabel:'1 glass (200ml)'},
+  {name:'Nannari Sharbat',cat:'South Indian',kcal:95,protein:0.2,carbs:24.0,fat:0,fibre:0,ca:5,fe:0.2,vitC:3,vitA:0,zinc:0,potassium:30,b1:0,b2:0,b3:0,pieceG:200,pieceLabel:'1 glass (200ml)'},
+  {name:'Panakam (jaggery lemon drink)',cat:'South Indian',kcal:75,protein:0.2,carbs:19.0,fat:0,fibre:0,ca:15,fe:0.8,vitC:8,vitA:0,zinc:0.1,potassium:80,b1:0,b2:0.01,b3:0.1,pieceG:200,pieceLabel:'1 glass (200ml)'},
+  {name:'Ragi Java (finger millet drink)',cat:'South Indian',kcal:80,protein:2.5,carbs:16.0,fat:0.5,fibre:1.5,ca:120,fe:1.5,vitC:0,vitA:0,zinc:0.5,potassium:120,b1:0.08,b2:0.04,b3:0.5,pieceG:200,pieceLabel:'1 glass (200ml)'},
+  {name:'Sol Kadhi (kokum coconut milk)',cat:'South Indian',kcal:55,protein:1.0,carbs:4.5,fat:4.0,fibre:0.5,ca:15,fe:0.5,vitC:3,vitA:0,zinc:0.2,potassium:120,b1:0.02,b2:0.02,b3:0.2,pieceG:150,pieceLabel:'1 glass (150ml)'},
+
+  // ── PICKLES & ACCOMPANIMENTS ──────────────────────────────────────────────
+  {name:'Avakaya (raw mango pickle)',cat:'South Indian',kcal:90,protein:1.0,carbs:8.0,fat:6.0,fibre:2.5,ca:15,fe:1.0,vitC:20,vitA:10,zinc:0.2,potassium:100,b1:0.02,b2:0.02,b3:0.3},
+  {name:'Gongura Pickle',cat:'South Indian',kcal:80,protein:1.5,carbs:6.0,fat:5.5,fibre:3.0,ca:70,fe:3.5,vitC:30,vitA:55,zinc:0.5,potassium:320,b1:0.06,b2:0.08,b3:0.7},
+  {name:'Nimmakaya Pickle (lemon pickle)',cat:'South Indian',kcal:70,protein:0.5,carbs:9.0,fat:4.0,fibre:1.5,ca:30,fe:0.5,vitC:25,vitA:5,zinc:0.1,potassium:80,b1:0.02,b2:0.02,b3:0.2},
+  {name:'Allam Pachadi (ginger chutney)',cat:'South Indian',kcal:110,protein:1.5,carbs:14.0,fat:5.5,fibre:2.0,ca:25,fe:0.8,vitC:5,vitA:5,zinc:0.3,potassium:200,b1:0.03,b2:0.03,b3:0.4},
+  {name:'Karivepaku Powder (curry leaf)',cat:'South Indian',kcal:290,protein:9.0,carbs:38.0,fat:12.0,fibre:8.0,ca:500,fe:8.0,vitC:5,vitA:150,zinc:1.5,potassium:450,b1:0.15,b2:0.20,b3:1.5},
+  {name:'Pappad / Papadum (1 piece)',cat:'South Indian',kcal:47,protein:2.5,carbs:6.5,fat:1.2,fibre:0.8,ca:15,fe:0.5,vitC:0,vitA:0,zinc:0.3,potassium:80,b1:0.04,b2:0.02,b3:0.3,pieceG:15,pieceLabel:'1 pappad (15g)'},
+  {name:'Fried Papadum (appalam)',cat:'South Indian',kcal:110,protein:3.5,carbs:10.0,fat:6.5,fibre:0.8,ca:15,fe:0.5,vitC:0,vitA:0,zinc:0.3,potassium:80,b1:0.04,b2:0.02,b3:0.3,pieceG:20,pieceLabel:'1 fried papadum (20g)'},
+
+  // ── MILLETS & HEALTH FOODS ────────────────────────────────────────────────
+  {name:'Ragi Dosa',cat:'South Indian',kcal:140,protein:4.5,carbs:24.0,fat:3.5,fibre:2.8,ca:145,fe:2.5,vitC:0,vitA:0,zinc:0.9,potassium:130,b1:0.10,b2:0.05,b3:0.6,pieceG:90,pieceLabel:'1 ragi dosa (90g)'},
+  {name:'Ragi Mudde (finger millet ball)',cat:'South Indian',kcal:175,protein:4.0,carbs:36.0,fat:1.0,fibre:3.5,ca:175,fe:3.0,vitC:0,vitA:0,zinc:1.0,potassium:150,b1:0.10,b2:0.05,b3:0.7,pieceG:100,pieceLabel:'1 mudde (100g)'},
+  {name:'Kambu Koozh (bajra porridge)',cat:'South Indian',kcal:120,protein:3.5,carbs:24.0,fat:1.5,fibre:2.0,ca:30,fe:2.0,vitC:0,vitA:0,zinc:0.8,potassium:130,b1:0.15,b2:0.06,b3:0.8},
+  {name:'Varagu Pongal (kodo millet)',cat:'South Indian',kcal:165,protein:4.5,carbs:30.0,fat:3.5,fibre:2.5,ca:20,fe:1.5,vitC:0,vitA:0,zinc:0.8,potassium:160,b1:0.10,b2:0.04,b3:0.8},
+  {name:'Samai Rice (little millet)',cat:'South Indian',kcal:155,protein:3.5,carbs:32.0,fat:1.5,fibre:3.0,ca:15,fe:1.5,vitC:0,vitA:0,zinc:0.7,potassium:120,b1:0.08,b2:0.04,b3:0.6},
+  {name:'Jowar Upma',cat:'South Indian',kcal:145,protein:4.5,carbs:28.0,fat:2.5,fibre:3.5,ca:20,fe:2.5,vitC:2,vitA:5,zinc:0.8,potassium:175,b1:0.15,b2:0.05,b3:1.2},
+  {name:'Thinai Payasam (foxtail millet)',cat:'South Indian',kcal:150,protein:3.5,carbs:26.0,fat:4.5,fibre:1.5,ca:100,fe:1.2,vitC:0,vitA:20,zinc:0.6,potassium:130,b1:0.08,b2:0.10,b3:0.5},
+
+  // ── FESTIVAL FOODS ────────────────────────────────────────────────────────
+  {name:'Karanji / Karjikai',cat:'South Indian',kcal:360,protein:6.0,carbs:50.0,fat:16.0,fibre:2.5,ca:30,fe:1.5,vitC:0,vitA:0,zinc:0.5,potassium:120,b1:0.08,b2:0.05,b3:0.6,pieceG:50,pieceLabel:'1 karanji (50g)'},
+  {name:'Seedai (rice flour balls)',cat:'South Indian',kcal:430,protein:7.0,carbs:58.0,fat:19.0,fibre:1.5,ca:25,fe:1.5,vitC:0,vitA:0,zinc:0.5,potassium:90,b1:0.05,b2:0.03,b3:0.5},
+  {name:'Thattai (crispy snack)',cat:'South Indian',kcal:445,protein:8.0,carbs:60.0,fat:19.0,fibre:2.0,ca:25,fe:2.0,vitC:0,vitA:0,zinc:0.7,potassium:120,b1:0.07,b2:0.04,b3:0.6},
+  {name:'Ammini Kozhukattai',cat:'South Indian',kcal:175,protein:2.5,carbs:30.0,fat:5.0,fibre:1.0,ca:12,fe:0.5,vitC:0,vitA:0,zinc:0.2,potassium:70,b1:0.02,b2:0.02,b3:0.3,pieceG:15,pieceLabel:'1 piece (15g)'},
+  {name:'Suzhiyan (sweet dal fritter)',cat:'South Indian',kcal:210,protein:5.0,carbs:32.0,fat:8.0,fibre:2.5,ca:30,fe:1.5,vitC:0,vitA:0,zinc:0.6,potassium:130,b1:0.08,b2:0.05,b3:0.6,pieceG:45,pieceLabel:'1 suzhiyan (45g)'},
+  {name:'Obbattu / Holige (Karnataka)',cat:'South Indian',kcal:310,protein:7.5,carbs:51.0,fat:9.5,fibre:3.0,ca:50,fe:2.0,vitC:0,vitA:0,zinc:0.8,potassium:160,b1:0.12,b2:0.07,b3:0.8,pieceG:80,pieceLabel:'1 obbattu (80g)'},
+  {name:'Chakli (Diwali snack)',cat:'South Indian',kcal:490,protein:8.5,carbs:58.0,fat:24.0,fibre:2.5,ca:30,fe:2.5,vitC:0,vitA:0,zinc:0.8,potassium:150,b1:0.08,b2:0.04,b3:0.8},
 ];
 
 // Daily RDA targets — protein is dynamic (1.5g × bodyweight kg)

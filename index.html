@@ -518,12 +518,12 @@ select.inp{cursor:pointer}
   </div>
 
   <!-- User menu dropdown -->
-  <div id="user-menu" style="display:none;position:fixed;top:52px;right:12px;z-index:500;background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:8px;min-width:200px;box-shadow:0 8px 24px rgba(0,0,0,.2)">
-    <div id="user-menu-name" style="font-weight:700;font-size:14px;color:var(--text);padding:8px 10px 4px"></div>
-    <div id="user-menu-email" style="font-size:11px;color:var(--text3);padding:0 10px 8px;border-bottom:1px solid var(--border);margin-bottom:4px"></div>
-    <button onclick="syncNow()" style="width:100%;text-align:left;background:none;border:none;padding:8px 10px;font-size:13px;color:var(--text2);cursor:pointer;border-radius:8px">🔄 Sync now</button>
-    <div id="user-menu-sync-time" style="font-size:10px;color:var(--text3);padding:0 10px 6px"></div>
-    <button onclick="authLogout()" style="width:100%;text-align:left;background:none;border:none;padding:8px 10px;font-size:13px;color:var(--red);cursor:pointer;border-radius:8px">→ Sign out</button>
+  <div id="user-menu" style="display:none;position:fixed;top:52px;right:8px;z-index:500;background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:6px;min-width:170px;max-width:calc(100vw - 16px);box-shadow:0 8px 24px rgba(0,0,0,.2)">
+    <div id="user-menu-name" style="font-weight:700;font-size:13px;color:var(--text);padding:6px 8px 2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis"></div>
+    <div id="user-menu-email" style="font-size:10px;color:var(--text3);padding:0 8px 6px;border-bottom:1px solid var(--border);margin-bottom:4px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis"></div>
+    <button onclick="syncNow()" style="width:100%;text-align:left;background:none;border:none;padding:6px 8px;font-size:12px;color:var(--text2);cursor:pointer;border-radius:6px">🔄 Sync now</button>
+    <div id="user-menu-sync-time" style="font-size:9px;color:var(--text3);padding:0 8px 4px"></div>
+    <button onclick="authLogout()" style="width:100%;text-align:left;background:none;border:none;padding:6px 8px;font-size:12px;color:var(--red);cursor:pointer;border-radius:6px">→ Sign out</button>
   </div>
 
   <!-- NAV (hidden, kept for JS compat) -->
@@ -562,6 +562,7 @@ select.inp{cursor:pointer}
       <button class="btn-outline" id="timer-btn" onclick="toggleTimer()" style="flex:1">▶ Start</button>
       <button class="btn-outline" onclick="resetTimer()">Reset</button>
       <button class="btn-outline" onclick="openLibrary()" style="flex:1" id="add-ex-btn">+ Exercise</button>
+      <button class="btn-outline" onclick="openCommunityWorkouts()" title="Browse community workouts" style="padding:10px 12px;flex-shrink:0">🌍</button>
     </div>
     <div class="view-toggle">
       <button class="view-btn active" id="vbtn-week" onclick="setView('week')">This Week</button>
@@ -710,9 +711,9 @@ select.inp{cursor:pointer}
           3. Tap <b style="color:var(--text2)">Steps</b> in the Activity section<br>
           4. Enter today's count below ↓
         </div>
-        <div style="display:flex;gap:8px;align-items:center">
-          <input class="inp" id="step-manual-input" type="number" inputmode="numeric" placeholder="Enter steps e.g. 7500" style="flex:1;font-size:14px">
-          <button class="btn-primary" style="flex-shrink:0;padding:10px 16px" onclick="syncManualSteps()">Sync ✓</button>
+        <div style="display:flex;gap:8px;align-items:stretch;margin-top:4px">
+          <input class="inp" id="step-manual-input" type="number" inputmode="numeric" placeholder="Enter steps e.g. 7500" style="flex:1;font-size:14px;min-width:0">
+          <button class="btn-primary" style="flex-shrink:0;padding:10px 14px;white-space:nowrap" onclick="syncManualSteps()">Sync ✓</button>
         </div>
       </div>
 
@@ -1121,6 +1122,14 @@ select.inp{cursor:pointer}
             </div>
           </div>
           <button class="btn-primary" onclick="addCustomFood()" style="width:100%">Save & Add Custom Food ✓</button>
+          <!-- Public/Private toggle -->
+          <div style="display:flex;align-items:center;justify-content:center;gap:8px;margin-top:10px;padding:8px;background:var(--surface2);border-radius:10px">
+            <label style="display:flex;align-items:center;gap:6px;cursor:pointer;font-size:12px;color:var(--text2)">
+              <input type="checkbox" id="cf-public" style="width:16px;height:16px;cursor:pointer;accent-color:var(--red)">
+              <span>🌍 Share with all LiftLog users</span>
+            </label>
+          </div>
+          <div id="cf-public-note" style="display:none;font-size:10px;color:var(--text3);text-align:center;margin-top:4px">Your name will be shown as the contributor</div>
         </div>
       </div>
     </div>
@@ -1318,11 +1327,7 @@ select.inp{cursor:pointer}
 <script>
 const STORAGE_KEY='liftlog_v1';
 let state={
-  exercises:[
-    {name:'Bench Press',muscle:'Chest',sets:[{w:80,r:8,done:false},{w:85,r:6,done:false},{w:90,r:5,done:false}]},
-    {name:'Overhead Press',muscle:'Shoulders',sets:[{w:55,r:10,done:false},{w:60,r:8,done:false},{w:65,r:6,done:false}]},
-    {name:'Tricep Pushdown',muscle:'Triceps',sets:[{w:30,r:12,done:false},{w:35,r:10,done:false}]},
-  ],
+  exercises:[],
   workoutHistory:[],weightLog:[],expanded:{},timerSecs:0,timerRunning:false,
   selectedExercise:0,streak:0,lastSaved:null,
   calProfile:{wt:75,gender:'male',age:28,fit:'intermediate'},
@@ -1577,6 +1582,7 @@ function renderDayDetail(ds, container){
         </div>
         <div style="display:flex;gap:6px">
           <button class="btn-sm" onclick="editPastWorkout('${w.id||w._idx}')">Edit</button>
+          <button class="btn-sm" onclick="shareWorkout('${w.id||w._idx}')" title="Share with community" style="background:rgba(99,102,241,.15);color:#6366f1;border-color:rgba(99,102,241,.3)">🌍 Share</button>
           <button class="btn-sm btn-danger" onclick="deleteWorkout('${w.id||w._idx}')">Delete</button>
         </div>
       </div>
@@ -1801,6 +1807,20 @@ function renderExercises(){
   const c=document.getElementById('ex-container'); c.innerHTML='';
   let td=0,ts=0,tv=0;
   const bw=state.calProfile.wt||75;
+
+  // Empty state — show when no exercises added yet today
+  if(!state.exercises.length){
+    c.innerHTML=`
+      <div style="text-align:center;padding:32px 20px;color:var(--text3)">
+        <div style="font-size:48px;margin-bottom:12px">🏋️</div>
+        <div style="font-family:var(--font-cond);font-weight:900;font-size:20px;color:var(--text2);margin-bottom:6px">Start your workout</div>
+        <div style="font-size:13px;line-height:1.5;margin-bottom:20px">Tap <b>+ Exercise</b> to add exercises<br>or use <b>Quick Add</b> to log sets fast</div>
+      </div>`;
+    document.getElementById('wk-sets').textContent='0/0';
+    document.getElementById('wk-vol').textContent='0';
+    document.getElementById('wk-kcal').textContent='0';
+    return;
+  }
   state.exercises.forEach((ex,i)=>{
     const done=ex.sets.filter(s=>s.done).length; td+=done; ts+=ex.sets.length;
     const vol=ex.sets.filter(s=>s.done).reduce((a,s)=>a+s.w*s.r,0); tv+=vol;
@@ -1823,7 +1843,7 @@ function renderExercises(){
         <div style="display:flex;align-items:center;gap:8px">
           <button onclick="event.stopPropagation();showPlateCalc(${i})" title="Plate calculator" style="background:none;border:none;font-size:16px;cursor:pointer;padding:2px;opacity:.5">🏋️</button>
           <button onclick="event.stopPropagation();toggleSuperset(${i})" title="Superset" style="background:none;border:none;font-size:14px;cursor:pointer;padding:2px;opacity:.5">🔗</button>
-          <button onclick="event.stopPropagation();deleteExercise(${i})" title="Remove exercise" style="background:none;border:none;font-size:20px;color:var(--text3);cursor:pointer;padding:2px 4px;line-height:1">&times;</button>
+          <button onclick="event.stopPropagation();deleteExercise(${i})" title="Remove exercise" style="background:var(--red-bg,rgba(226,75,74,.1));border:none;border-radius:8px;padding:4px 8px;cursor:pointer;display:flex;align-items:center;gap:3px;color:var(--red);font-size:11px;font-weight:700">🗑️ Remove</button>
           <div class="ex-chevron${state.expanded[i]?' open':''}">&#9662;</div>
         </div>
       </div>
@@ -1908,7 +1928,32 @@ function bindSetInputs(ex,i){
 function toggleEx(i){state.expanded[i]=!state.expanded[i];renderExercises();}
 function addSet(i){const l=state.exercises[i].sets[state.exercises[i].sets.length-1];state.exercises[i].sets.push({w:l?l.w:0,r:l?l.r:8,done:false});renderExercises();autoSave();}
 function deleteSet(i,j){if(state.exercises[i].sets.length<=1)return toast('Need at least 1 set');state.exercises[i].sets.splice(j,1);renderExercises();autoSave();}
-function deleteExercise(i){if(!confirm('Remove "'+state.exercises[i].name+'" from today?'))return;state.exercises.splice(i,1);renderExercises();autoSave();}
+// Undo buffer for exercise removal
+let _removedEx=null, _removedExIdx=-1, _removeUndoTimer=null;
+
+function deleteExercise(i){
+  const ex=state.exercises[i];
+  _removedEx={...ex,sets:[...ex.sets]};
+  _removedExIdx=i;
+  state.exercises.splice(i,1);
+  renderExercises();
+  autoSave();
+  clearTimeout(_removeUndoTimer);
+  const el=document.getElementById('toast');
+  el.innerHTML='Removed <b>'+ex.name+'</b> &nbsp;<button onclick="undoRemoveExercise()" style="background:#fff;color:#333;border:none;border-radius:6px;padding:2px 8px;font-size:12px;font-weight:700;cursor:pointer;margin-left:4px">Undo</button>';
+  el.classList.add('show');
+  _removeUndoTimer=setTimeout(()=>{el.classList.remove('show');el.innerHTML='';_removedEx=null;},4000);
+}
+
+function undoRemoveExercise(){
+  if(!_removedEx) return;
+  clearTimeout(_removeUndoTimer);
+  state.exercises.splice(_removedExIdx,0,_removedEx);
+  _removedEx=null;
+  renderExercises();
+  autoSave();
+  toast('Restored ✓');
+}
 
 function addCustomExercise(){
   const nameEl=document.getElementById('custom-ex-name');
@@ -4065,6 +4110,12 @@ document.addEventListener('DOMContentLoaded',()=>{
       `${lines.length} exercise${lines.length>1?'s':''}, ${pairs.length} sets detected — press Add`;
     else prev.textContent='';
   });
+  // Show note when public checkbox ticked
+  const cfPublic=document.getElementById('cf-public');
+  if(cfPublic) cfPublic.addEventListener('change',()=>{
+    const note=document.getElementById('cf-public-note');
+    if(note) note.style.display=cfPublic.checked?'block':'none';
+  });
 });
 
 // ─── STEP COUNTER ─────────────────────────────────────────────────────────────
@@ -5275,17 +5326,25 @@ function setFoodMeal(meal){
 }
 function renderFoodCategoryChips(){
   const allCats=[...new Set(FOOD_DB.map(f=>f.cat))].sort();
-  // Custom always first if it exists
-  const cats=['All',...allCats.filter(c=>c==='Custom'),...allCats.filter(c=>c!=='Custom')];
+  // Custom always first, Community at end
+  const cats=['All','Community',...allCats.filter(c=>c==='Custom'),...allCats.filter(c=>c!=='Custom'&&c!=='Community')];
   document.getElementById('food-cat-chips').innerHTML=cats.map(c=>{
-    const label=c==='Custom'?'⭐ Custom':c;
+    const label=c==='Custom'?'⭐ Mine':c==='Community'?'🌍 Community':c;
     return `<div class="food-cat-chip${c===_fCatFilter?' active':''}" onclick="setFoodCat('${c}')">${label}</div>`;
   }).join('');
 }
 function setFoodCat(cat){
   _fCatFilter=cat;
-  document.querySelectorAll('.food-cat-chip').forEach(c=>c.classList.toggle('active',c.textContent===cat));
-  renderFoodSearchList();
+  document.querySelectorAll('.food-cat-chip').forEach(c=>{
+    const label=c.textContent;
+    const match=(cat==='Community'&&label==='🌍 Community')||(cat==='Custom'&&label==='⭐ Mine')||(label===cat);
+    c.classList.toggle('active',match);
+  });
+  if(cat==='Community'){
+    loadCommunityFoods().then(()=>renderFoodSearchList());
+  } else {
+    renderFoodSearchList();
+  }
 }
 function filterFoodSearch(){
   _fSearchQ=document.getElementById('food-search-inp').value.toLowerCase();
@@ -5323,10 +5382,11 @@ function renderFoodSearchList(){
   list.innerHTML=html;
 }
 function foodItemHTML(f){
-  const isCustom=f._custom?'<span style="font-size:9px;background:var(--surface2);color:var(--text3);padding:2px 5px;border-radius:4px;font-weight:700;margin-left:4px">CUSTOM</span>':'';
+  const isCustom=f._custom&&!f._community?'<span style="font-size:9px;background:var(--surface2);color:var(--text3);padding:2px 5px;border-radius:4px;font-weight:700;margin-left:4px">MINE</span>':'';
+  const isCommunity=f._community?`<span style="font-size:9px;background:rgba(99,102,241,.15);color:#6366f1;padding:2px 5px;border-radius:4px;font-weight:700;margin-left:4px">🌍 ${f._contributor||'Community'}</span>`:'';
   return `<div class="food-item" onclick="openFoodQty('${f.name.replace(/'/g,"\\'")}')">
     <div style="flex:1;min-width:0">
-      <div class="food-item-name">${f.name}${isCustom}</div>
+      <div class="food-item-name">${f.name}${isCustom}${isCommunity}</div>
       <div class="food-item-meta">${f.cat} · P:${f.protein}g C:${f.carbs}g Fat:${f.fat}g Fibre:${f.fibre}g <span style="color:var(--text3)">per 100g</span></div>
     </div>
     <div class="food-item-kcal">${f.kcal}</div>
@@ -5466,6 +5526,7 @@ function addCustomFood(){
   const fat=parseFloat(document.getElementById('cf-fat')?.value)||0;
   const fibre=parseFloat(document.getElementById('cf-fibre')?.value)||0;
   const cat=document.getElementById('cf-cat')?.value||'Custom';
+  const isPublic=document.getElementById('cf-public')?.checked||false;
 
   if(!name){toast('Enter a food name');return;}
   if(!kcal){toast('Enter calories per 100g');return;}
@@ -5480,10 +5541,23 @@ function addCustomFood(){
   state.customFoods.push(f);
   saveState({customFood:true});
 
+  // If public — push to community_foods table
+  if(isPublic && _sb && _sbUser){
+    const displayName=document.getElementById('user-menu-name')?.textContent||'LiftLog User';
+    _sb.from('community_foods').insert({
+      user_id:_sbUser.id,
+      display_name:displayName,
+      food_data:f
+    }).then(({error})=>{
+      if(!error) toast('"'+name+'" shared with community! 🌍');
+    });
+  }
+
   // Clear all fields
   ['cf-name','cf-kcal','cf-protein','cf-carbs','cf-fat','cf-fibre'].forEach(id=>{
     const el=document.getElementById(id); if(el) el.value='';
   });
+  const pfEl=document.getElementById('cf-public'); if(pfEl) pfEl.checked=false;
   // Collapse back to simple view
   const exp=document.getElementById('cf-expanded');
   const col=document.getElementById('cf-collapsed');
@@ -5495,7 +5569,109 @@ function addCustomFood(){
   renderFoodSearchList();
   renderFoodCategoryChips();
   openFoodQty(name);
-  toast('"'+name+'" saved! '+kcal+' kcal · P:'+protein+'g C:'+carbs+'g Fat:'+fat+'g Fibre:'+fibre+'g');
+  if(!isPublic) toast('"'+name+'" saved! '+kcal+' kcal · P:'+protein+'g C:'+carbs+'g Fat:'+fat+'g Fibre:'+fibre+'g');
+}
+
+// ─── COMMUNITY FOODS ──────────────────────────────────────────────────────────
+let _communityFoods=[]; // cached community foods
+let _communityFoodsLoaded=false;
+
+async function loadCommunityFoods(){
+  if(!_sb||_communityFoodsLoaded) return;
+  try{
+    const {data}=await _sb.from('community_foods')
+      .select('*').order('created_at',{ascending:false}).limit(200);
+    if(data){
+      _communityFoods=data.map(r=>({
+        ...r.food_data,
+        _community:true,
+        _contributor:r.display_name||'Community',
+        _communityId:r.id
+      }));
+      // Add to FOOD_DB if not already there
+      _communityFoods.forEach(f=>{
+        if(!FOOD_DB.find(x=>x.name.toLowerCase()===f.name.toLowerCase()))
+          FOOD_DB.push(f);
+      });
+      _communityFoodsLoaded=true;
+    }
+  }catch(e){console.warn('Community foods load error:',e);}
+}
+
+// Share a past workout as a community template
+async function shareWorkout(wid){
+  if(!_sb||!_sbUser){toast('Sign in to share');return;}
+  const w=state.workoutHistory.find(x=>x.id===wid);
+  if(!w){toast('Workout not found');return;}
+  const title=prompt('Give this workout a name (e.g. "Upper Body Power"):', fmtDate(w.date)+' Workout');
+  if(!title) return;
+  const displayName=document.getElementById('user-menu-name')?.textContent||'LiftLog User';
+  const {error}=await _sb.from('community_workouts').insert({
+    user_id:_sbUser.id,
+    display_name:displayName,
+    title,
+    exercises:w.exercises
+  });
+  if(!error) toast('Workout shared with community! 🌍');
+  else toast('Share failed: '+error.message);
+}
+
+// Browse and clone community workouts
+let _communityWorkouts=[];
+async function openCommunityWorkouts(){
+  if(!_sb){toast('Sign in to browse community workouts');return;}
+  try{
+    const {data}=await _sb.from('community_workouts')
+      .select('*').order('created_at',{ascending:false}).limit(50);
+    _communityWorkouts=data||[];
+    renderCommunityWorkoutsModal();
+  }catch(e){toast('Could not load community workouts');}
+}
+
+function renderCommunityWorkoutsModal(){
+  let existing=document.getElementById('community-modal');
+  if(existing) existing.remove();
+  const modal=document.createElement('div');
+  modal.id='community-modal';
+  modal.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:1000;display:flex;align-items:flex-end';
+  const sheet=document.createElement('div');
+  sheet.style.cssText='background:var(--surface);width:100%;max-height:80vh;border-radius:16px 16px 0 0;overflow-y:auto;padding:16px';
+  sheet.innerHTML=`
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px">
+      <div style="font-family:var(--font-cond);font-weight:900;font-size:18px">🌍 Community Workouts</div>
+      <button onclick="document.getElementById('community-modal').remove()" style="background:none;border:none;font-size:22px;color:var(--text3);cursor:pointer">×</button>
+    </div>
+    ${_communityWorkouts.length===0?'<div style="text-align:center;padding:20px;color:var(--text3)">No community workouts yet — share yours!</div>':
+    _communityWorkouts.map(w=>`
+      <div style="background:var(--surface2);border-radius:10px;padding:10px;margin-bottom:8px">
+        <div style="display:flex;justify-content:space-between;align-items:start">
+          <div>
+            <div style="font-weight:700;font-size:14px">${w.title}</div>
+            <div style="font-size:11px;color:var(--text3);margin-top:2px">by ${w.display_name||'Community'} · ${w.exercises?.length||0} exercises</div>
+            <div style="font-size:11px;color:var(--text3);margin-top:2px">${(w.exercises||[]).slice(0,3).map(e=>e.name).join(', ')}${w.exercises?.length>3?'…':''}</div>
+          </div>
+          <button onclick="cloneCommunityWorkout('${w.id}')" style="background:var(--red);color:#fff;border:none;border-radius:8px;padding:6px 12px;font-size:12px;font-weight:700;cursor:pointer;flex-shrink:0;margin-left:8px">Use It</button>
+        </div>
+      </div>`).join('')}
+  `;
+  modal.appendChild(sheet);
+  modal.onclick=e=>{if(e.target===modal)modal.remove();};
+  document.body.appendChild(modal);
+}
+
+function cloneCommunityWorkout(id){
+  const w=_communityWorkouts.find(x=>x.id===id);
+  if(!w) return;
+  // Load exercises into today's workout
+  const newExercises=w.exercises.map(ex=>({
+    ...ex,
+    sets:(ex.sets||[{w:0,r:10}]).map(s=>({...s,done:false}))
+  }));
+  state.exercises=[...state.exercises,...newExercises];
+  renderExercises();
+  autoSave();
+  document.getElementById('community-modal').remove();
+  toast('Loaded "'+w.title+'" into today\'s workout!');
 }
 
 // ─── TELEGRAM MINI APP INTEGRATION ───────────────────────────────────────────

@@ -6292,20 +6292,46 @@ async function syncFromSupabase(){
       // Always mark active session dirty (fast, small)
       _dirty.activeSession=true;
       clearTimeout(_syncDebounceTimer);
-      setSyncDot('pending');
+      setSyncDot('pending'); // will show count immediately
       _syncDebounceTimer = setTimeout(syncToSupabase, 5000); // 5s debounce
     }
   };
 })();
 
 // ── Sync indicator dot ────────────────────────────────────────────────────────
-function setSyncDot(status){
+function getSyncPendingCount(){
+  return _dirty.workouts.size + _dirty.deletedWorkouts.size +
+    _dirty.foodDates.size + _dirty.stepDates.size +
+    (_dirty.profile?1:0) + (_dirty.activeSession?1:0) +
+    (_dirty.weightLog?1:0) + (_dirty.customFoods?1:0) +
+    (_dirty.exerciseMemory?1:0);
+}
+
+function setSyncDot(status, extra){
   const dot = document.getElementById('sync-dot');
   if(!dot) return;
   dot.style.display = 'block';
-  const colors = {ok:'#22c55e', syncing:'#f97316', error:'var(--red)', pending:'#eab308'};
-  dot.style.background = colors[status]||'#22c55e';
-  dot.title = {ok:'Synced',syncing:'Syncing…',error:'Sync error — saved locally',pending:'Changes pending'}[status]||'';
+  const styles = {
+    ok:      'background:#22c55e;color:#fff',
+    syncing: 'background:#f97316;color:#fff',
+    error:   'background:var(--red);color:#fff',
+    pending: 'background:#eab308;color:#000'
+  };
+  dot.style.cssText = `display:inline-flex;align-items:center;border-radius:999px;padding:2px 7px;font-size:10px;font-weight:700;cursor:default;flex-shrink:0;${styles[status]||styles.ok}`;
+  const count = getSyncPendingCount();
+  const labels = {
+    ok:      '✓ Synced',
+    syncing: '↑ Syncing…',
+    error:   '⚠ Error',
+    pending: count > 0 ? `↑ ${count} pending` : '↑ Pending'
+  };
+  dot.textContent = labels[status] || '✓ Synced';
+  dot.title = {
+    ok:'All data synced to cloud',
+    syncing:'Uploading changes…',
+    error:'Sync failed — data saved locally, will retry',
+    pending:`${count} change${count!==1?'s':''} waiting to upload`
+  }[status]||'';
 }
 
 async function syncNow(){

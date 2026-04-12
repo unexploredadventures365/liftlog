@@ -711,9 +711,14 @@ select.inp{cursor:pointer}
           3. Tap <b style="color:var(--text2)">Steps</b> in the Activity section<br>
           4. Enter today's count below ↓
         </div>
-        <div style="display:flex;gap:8px;align-items:stretch;margin-top:4px">
-          <input class="inp" id="step-manual-input" type="number" inputmode="numeric" placeholder="Enter steps e.g. 7500" style="flex:1;font-size:14px;min-width:0">
-          <button class="btn-primary" style="flex-shrink:0;padding:10px 14px;white-space:nowrap" onclick="syncManualSteps()">Sync ✓</button>
+        <div style="display:flex;gap:8px;align-items:center;margin-top:8px;width:100%">
+          <input class="inp" id="step-manual-input" type="number" inputmode="numeric"
+            placeholder="e.g. 7500"
+            style="flex:1;min-width:0;font-size:15px;padding:11px 12px">
+          <button class="btn-primary" onclick="syncManualSteps()"
+            style="flex-shrink:0;width:90px;padding:11px 0;font-size:14px;text-align:center">
+            Sync ✓
+          </button>
         </div>
       </div>
 
@@ -1063,26 +1068,32 @@ select.inp{cursor:pointer}
         <button class="food-meal-btn" id="fmeal-dinner" onclick="setFoodMeal('dinner')">🌙 Dinner</button>
         <button class="food-meal-btn" id="fmeal-snack" onclick="setFoodMeal('snack')">🍎 Snack</button>
       </div>
-      <!-- Search -->
-      <div style="padding:8px 16px;border-bottom:1px solid var(--border);flex-shrink:0">
-        <input class="inp" id="food-search-inp" placeholder="Search Indian foods…" oninput="filterFoodSearch()" autocomplete="off" style="width:100%">
+      <!-- Mode tabs -->
+      <div style="display:flex;gap:0;border-bottom:2px solid var(--border);flex-shrink:0;overflow-x:auto;scrollbar-width:none">
+        <button id="ftab-search" onclick="setFoodTab('search')" style="flex:1;background:none;border:none;border-bottom:2px solid var(--red);margin-bottom:-2px;padding:8px 4px;font-size:11px;font-weight:700;color:var(--red);cursor:pointer;white-space:nowrap">🔍 Search</button>
+        <button id="ftab-quick" onclick="setFoodTab('quick')" style="flex:1;background:none;border:none;border-bottom:2px solid transparent;margin-bottom:-2px;padding:8px 4px;font-size:11px;font-weight:700;color:var(--text3);cursor:pointer;white-space:nowrap">⚡ Quick</button>
+        <button id="ftab-frequent" onclick="setFoodTab('frequent')" style="flex:1;background:none;border:none;border-bottom:2px solid transparent;margin-bottom:-2px;padding:8px 4px;font-size:11px;font-weight:700;color:var(--text3);cursor:pointer;white-space:nowrap">🔁 Recent</button>
+        <button id="ftab-templates" onclick="setFoodTab('templates')" style="flex:1;background:none;border:none;border-bottom:2px solid transparent;margin-bottom:-2px;padding:8px 4px;font-size:11px;font-weight:700;color:var(--text3);cursor:pointer;white-space:nowrap">📋 Meals</button>
+        <button id="ftab-ai" onclick="setFoodTab('ai')" style="flex:1;background:none;border:none;border-bottom:2px solid transparent;margin-bottom:-2px;padding:8px 4px;font-size:11px;font-weight:700;color:var(--text3);cursor:pointer;white-space:nowrap">🤖 AI</button>
       </div>
-      <!-- Category chips -->
-      <div id="food-cat-chips" style="display:flex;gap:6px;padding:8px 16px;overflow-x:auto;scrollbar-width:none;border-bottom:1px solid var(--border);flex-shrink:0"></div>
-      <!-- Food list — scrollable middle section -->
-      <div id="food-search-list" style="overflow-y:auto;flex:1;min-height:0"></div>
-      <!-- Custom food entry — always pinned at bottom -->
-      <div style="padding:10px 16px;border-top:2px solid var(--border);background:var(--surface);flex-shrink:0">
-        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px">
-          <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.8px;color:var(--text3)">Can't find it? Add custom food:</div>
-          <button style="background:none;border:none;font-size:11px;color:var(--red);font-weight:700;cursor:pointer" onclick="toggleCustomForm()"  id="cf-toggle">▼ Expand</button>
+
+      <!-- TAB: Search (default) -->
+      <div id="food-tab-search" style="display:flex;flex-direction:column;flex:1;min-height:0;overflow:hidden">
+        <div style="padding:8px 16px;border-bottom:1px solid var(--border);flex-shrink:0">
+          <input class="inp" id="food-search-inp" placeholder="Search 365+ Indian foods…" oninput="filterFoodSearch()" autocomplete="off" style="width:100%">
         </div>
-        <!-- Collapsed: just name + kcal row -->
-        <div id="cf-collapsed" style="display:flex;gap:6px;align-items:center">
-          <input class="inp" id="cf-name" placeholder="Food name" style="flex:1;min-width:0;font-size:13px">
-          <input class="inp" id="cf-kcal" placeholder="kcal/100g" type="number" inputmode="numeric" style="width:80px;font-size:13px">
-          <button class="lib-custom-btn" onclick="addCustomFood()" style="padding:9px 12px;flex-shrink:0">Add</button>
-        </div>
+        <div id="food-cat-chips" style="display:flex;gap:6px;padding:8px 16px;overflow-x:auto;scrollbar-width:none;border-bottom:1px solid var(--border);flex-shrink:0"></div>
+        <div id="food-search-list" style="overflow-y:auto;flex:1;min-height:0"></div>
+        <div style="padding:10px 16px;border-top:2px solid var(--border);background:var(--surface);flex-shrink:0">
+          <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px">
+            <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.8px;color:var(--text3)">Can't find it? Add custom food:</div>
+            <button style="background:none;border:none;font-size:11px;color:var(--red);font-weight:700;cursor:pointer" onclick="toggleCustomForm()" id="cf-toggle">▼ Expand</button>
+          </div>
+          <div id="cf-collapsed" style="display:flex;gap:6px;align-items:center">
+            <input class="inp" id="cf-name" placeholder="Food name" style="flex:1;min-width:0;font-size:13px">
+            <input class="inp" id="cf-kcal" placeholder="kcal/100g" type="number" inputmode="numeric" style="width:80px;font-size:13px">
+            <button class="lib-custom-btn" onclick="addCustomFood()" style="padding:9px 12px;flex-shrink:0">Add</button>
+          </div>
         <!-- Expanded: all macros -->
         <div id="cf-expanded" style="display:none;margin-top:6px">
           <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:6px;margin-bottom:6px">
@@ -1132,6 +1143,52 @@ select.inp{cursor:pointer}
           <div id="cf-public-note" style="display:none;font-size:10px;color:var(--text3);text-align:center;margin-top:4px">Your name will be shown as the contributor</div>
         </div>
       </div>
+      </div><!-- end food-tab-search -->
+
+      <!-- TAB: Quick Combo -->
+      <div id="food-tab-quick" style="display:none;flex-direction:column;flex:1;min-height:0;overflow:hidden;padding:16px">
+        <div style="font-size:13px;color:var(--text2);margin-bottom:10px;line-height:1.5">Type everything you ate, separated by <b>+</b> or commas. Include quantities if you know them.</div>
+        <div style="background:var(--surface2);border-radius:10px;padding:10px 12px;margin-bottom:12px;font-size:12px;color:var(--text3);line-height:1.6">
+          Examples:<br>
+          <b>2 idli + sambar + filter coffee</b><br>
+          <b>rice 200g, dal, papad</b><br>
+          <b>3 chapati + paneer curry + curd</b>
+        </div>
+        <textarea id="quick-combo-inp" placeholder="e.g. 2 idli + sambar + coconut chutney + coffee…" style="width:100%;height:90px;padding:10px;border:1px solid var(--border);border-radius:10px;background:var(--surface2);color:var(--text);font-family:var(--font-body);font-size:14px;resize:none;box-sizing:border-box;margin-bottom:10px"></textarea>
+        <button class="btn-primary" onclick="parseQuickCombo()" style="width:100%;font-size:15px;padding:13px">Parse & Log All →</button>
+        <div id="quick-combo-results" style="margin-top:12px;overflow-y:auto;flex:1"></div>
+      </div>
+
+      <!-- TAB: Frequent / Recent -->
+      <div id="food-tab-frequent" style="display:none;flex-direction:column;flex:1;min-height:0;overflow-y:auto;padding:12px 16px">
+        <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.8px;color:var(--text3);margin-bottom:8px">Your most logged foods</div>
+        <div id="frequent-foods-list"></div>
+        <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.8px;color:var(--text3);margin:12px 0 8px">Yesterday's meals</div>
+        <div id="yesterday-meals-list"></div>
+      </div>
+
+      <!-- TAB: Meal Templates -->
+      <div id="food-tab-templates" style="display:none;flex-direction:column;flex:1;min-height:0;overflow:hidden">
+        <div style="padding:12px 16px;border-bottom:1px solid var(--border);flex-shrink:0">
+          <button class="btn-primary" onclick="saveMealTemplate()" style="width:100%;font-size:14px;padding:11px">💾 Save Today's ${_fSelectedMeal||'breakfast'} as Template</button>
+        </div>
+        <div id="meal-templates-list" style="overflow-y:auto;flex:1;padding:12px 16px"></div>
+      </div>
+
+      <!-- TAB: AI -->
+      <div id="food-tab-ai" style="display:none;flex-direction:column;flex:1;min-height:0;overflow:hidden;padding:16px">
+        <div style="font-size:13px;color:var(--text2);margin-bottom:10px;line-height:1.5">Describe what you ate in plain English, or upload a food photo. AI will estimate the nutrition.</div>
+        <!-- Photo upload -->
+        <div style="border:2px dashed var(--border);border-radius:12px;padding:12px;text-align:center;margin-bottom:10px;cursor:pointer;position:relative" onclick="document.getElementById('food-photo-inp').click()">
+          <div id="food-photo-preview" style="font-size:28px;margin-bottom:4px">📷</div>
+          <div style="font-size:12px;color:var(--text3)">Tap to take/upload a photo <span style="color:var(--text2);font-size:10px">(optional)</span></div>
+          <input type="file" id="food-photo-inp" accept="image/*" capture="environment" style="display:none" onchange="previewFoodPhoto(event)">
+        </div>
+        <textarea id="ai-food-inp" placeholder="e.g. I had a plate of rice with sambar, rasam, papad and a cup of curd… or just describe roughly" style="width:100%;height:80px;padding:10px;border:1px solid var(--border);border-radius:10px;background:var(--surface2);color:var(--text);font-family:var(--font-body);font-size:14px;resize:none;box-sizing:border-box;margin-bottom:10px"></textarea>
+        <button class="btn-primary" onclick="runAIMealGuess()" id="ai-food-btn" style="width:100%;font-size:15px;padding:13px">🤖 Guess My Meal →</button>
+        <div id="ai-food-results" style="margin-top:12px;overflow-y:auto;flex:1"></div>
+      </div>
+
     </div>
   </div>
 
@@ -1359,7 +1416,9 @@ function saveState(){
       foodLog:state.foodLog||{},
       customFoods:state.customFoods||[],
       stepLog:state.stepLog||{},
-      stepGoal:state.stepGoal||8000
+      stepGoal:state.stepGoal||8000,
+      frequentFoods:state.frequentFoods||{},
+      mealTemplates:state.mealTemplates||[]
     };
     localStorage.setItem(STORAGE_KEY,JSON.stringify(s));
     state.lastSaved=s.lastSaved;
@@ -1386,6 +1445,8 @@ function loadState(){
     if(s.foodLog) state.foodLog=s.foodLog;
     if(s.stepLog) state.stepLog=s.stepLog;
     if(s.stepGoal) state.stepGoal=s.stepGoal;
+    if(s.frequentFoods) state.frequentFoods=s.frequentFoods;
+    if(s.mealTemplates) state.mealTemplates=s.mealTemplates;
     if(s.customFoods&&s.customFoods.length){
       state.customFoods=s.customFoods;
       // Re-inject into FOOD_DB (avoid duplicates)
@@ -5572,7 +5633,398 @@ function addCustomFood(){
   if(!isPublic) toast('"'+name+'" saved! '+kcal+' kcal · P:'+protein+'g C:'+carbs+'g Fat:'+fat+'g Fibre:'+fibre+'g');
 }
 
-// ─── COMMUNITY FOODS ──────────────────────────────────────────────────────────
+// ─── FOOD TAB SWITCHER ────────────────────────────────────────────────────────
+let _activeFoodTab = 'search';
+function setFoodTab(tab){
+  _activeFoodTab = tab;
+  ['search','quick','frequent','templates','ai'].forEach(t=>{
+    const panel = document.getElementById('food-tab-'+t);
+    const btn = document.getElementById('ftab-'+t);
+    if(panel) panel.style.display = t===tab ? 'flex' : 'none';
+    if(btn){
+      btn.style.color = t===tab ? 'var(--red)' : 'var(--text3)';
+      btn.style.borderBottomColor = t===tab ? 'var(--red)' : 'transparent';
+    }
+  });
+  if(tab==='frequent') renderFrequentFoods();
+  if(tab==='templates') renderMealTemplates();
+}
+
+// ─── QUICK COMBO PARSER ───────────────────────────────────────────────────────
+function parseQuickCombo(){
+  const raw = document.getElementById('quick-combo-inp').value.trim();
+  if(!raw){toast('Type what you ate first');return;}
+  // Split on + or , or & or newline
+  const parts = raw.split(/[+,&\n]/).map(s=>s.trim()).filter(Boolean);
+  const results = [];
+  const unmatched = [];
+
+  parts.forEach(part=>{
+    // Try to extract quantity prefix: "2 idli", "200g rice", "3x chapati"
+    const qtyMatch = part.match(/^(\d+(?:\.\d+)?)\s*(?:x|×|pieces?|pcs?|g|grams?|ml)?\s+(.+)/i);
+    let qty = 100, name = part;
+    if(qtyMatch){
+      const num = parseFloat(qtyMatch[1]);
+      const isGrams = /g|gram/i.test(qtyMatch[0].split(qtyMatch[2])[0]);
+      qty = isGrams ? num : num; // will be interpreted as pieces or grams
+      name = qtyMatch[2].trim();
+    }
+
+    // Fuzzy match against FOOD_DB
+    const nameLower = name.toLowerCase();
+    let best = null, bestScore = 0;
+    FOOD_DB.forEach(f=>{
+      const fn = f.name.toLowerCase();
+      let score = 0;
+      if(fn === nameLower) score = 100;
+      else if(fn.includes(nameLower) || nameLower.includes(fn.split('(')[0].trim())) score = 80;
+      else {
+        const words = nameLower.split(' ');
+        words.forEach(w=>{ if(w.length>3 && fn.includes(w)) score += 20; });
+      }
+      if(score > bestScore){bestScore=score; best=f;}
+    });
+
+    if(best && bestScore >= 20){
+      // Determine grams
+      let grams = 100;
+      if(qtyMatch){
+        const isGrams = /g|gram/i.test(part.substring(0, part.indexOf(name)));
+        if(isGrams) grams = qty;
+        else if(best.pieceG) grams = best.pieceG * qty;
+        else grams = qty === 1 ? 100 : qty * 30; // rough default
+      }
+      results.push({food:best, grams, label:part});
+    } else {
+      unmatched.push(part);
+    }
+  });
+
+  // Show results with confirm
+  const div = document.getElementById('quick-combo-results');
+  if(!results.length){
+    div.innerHTML='<div style="color:var(--text3);font-size:13px;text-align:center;padding:12px">No foods matched. Try the Search tab or be more specific.</div>';
+    return;
+  }
+
+  let html = `<div style="font-size:12px;font-weight:700;color:var(--text3);margin-bottom:8px;text-transform:uppercase">Found ${results.length} items — tap to adjust, then log all:</div>`;
+  results.forEach((r,i)=>{
+    const kcal = Math.round(r.food.kcal * r.grams / 100);
+    const prot = (r.food.protein * r.grams / 100).toFixed(1);
+    html+=`<div style="background:var(--surface2);border-radius:10px;padding:10px 12px;margin-bottom:6px;display:flex;justify-content:space-between;align-items:center">
+      <div>
+        <div style="font-weight:600;font-size:13px">${r.food.name}</div>
+        <div style="font-size:11px;color:var(--text3)">${r.grams}g · ${kcal} kcal · P:${prot}g</div>
+      </div>
+      <div style="display:flex;align-items:center;gap:4px">
+        <input type="number" value="${r.grams}" inputmode="numeric" data-qc="${i}"
+          style="width:55px;padding:5px 6px;border:1px solid var(--border);border-radius:7px;background:var(--surface);color:var(--text);font-size:13px;text-align:center"
+          oninput="updateQCItem(${i},this.value,event)">
+        <span style="font-size:11px;color:var(--text3)">g</span>
+      </div>
+    </div>`;
+  });
+  if(unmatched.length) html+=`<div style="font-size:11px;color:var(--text3);margin-bottom:8px">⚠ Not found: ${unmatched.join(', ')}</div>`;
+  html+=`<button class="btn-primary" onclick="logQuickComboAll()" style="width:100%;font-size:15px;padding:13px;margin-top:4px">✓ Log All ${results.length} Foods</button>`;
+  div.innerHTML = html;
+  window._qcResults = results;
+}
+
+function updateQCItem(i, val){
+  if(!window._qcResults) return;
+  window._qcResults[i].grams = parseFloat(val)||100;
+}
+
+function logQuickComboAll(){
+  if(!window._qcResults) return;
+  const log = getFoodLog();
+  if(!log.meals) log.meals={breakfast:[],lunch:[],dinner:[],snack:[]};
+  if(!log.meals[_fSelectedMeal]) log.meals[_fSelectedMeal]=[];
+  let totalKcal = 0;
+  window._qcResults.forEach(r=>{
+    const g = r.grams;
+    log.meals[_fSelectedMeal].push({
+      name:r.food.name, grams:g, unit:'g', amount:g,
+      kcal:Math.round(r.food.kcal*g/100),
+      protein:parseFloat((r.food.protein*g/100).toFixed(1)),
+      carbs:parseFloat((r.food.carbs*g/100).toFixed(1)),
+      fat:parseFloat((r.food.fat*g/100).toFixed(1)),
+      fibre:parseFloat((r.food.fibre*g/100).toFixed(1))
+    });
+    totalKcal += Math.round(r.food.kcal*g/100);
+  });
+  if(!state.foodLog) state.foodLog={};
+  state.foodLog[foodDate] = log;
+  saveState({food:foodDate});
+  // Learn for frequent
+  window._qcResults.forEach(r=>learnFrequentFood(r.food.name));
+  renderFoodPage();
+  if(homeMode==='food') renderHomeFoodPanel();
+  closeFoodModal();
+  toast(`Logged ${window._qcResults.length} foods · ${totalKcal} kcal total 🎉`);
+  window._qcResults = null;
+}
+
+// ─── FREQUENT FOODS ───────────────────────────────────────────────────────────
+function learnFrequentFood(name){
+  if(!state.frequentFoods) state.frequentFoods={};
+  state.frequentFoods[name] = (state.frequentFoods[name]||0)+1;
+}
+
+function renderFrequentFoods(){
+  const freq = state.frequentFoods||{};
+  const top = Object.entries(freq).sort((a,b)=>b[1]-a[1]).slice(0,10);
+  const div = document.getElementById('frequent-foods-list');
+  if(!top.length){
+    div.innerHTML='<div style="color:var(--text3);font-size:13px;padding:8px 0">No frequent foods yet — log some meals first!</div>';
+  } else {
+    div.innerHTML = top.map(([name,count])=>{
+      const f = FOOD_DB.find(x=>x.name===name);
+      if(!f) return '';
+      return `<div class="food-item" onclick="openFoodQty('${name.replace(/'/g,"\\'")}')">
+        <div style="flex:1;min-width:0">
+          <div class="food-item-name">${name} <span style="font-size:10px;color:var(--text3)">${count}x logged</span></div>
+          <div class="food-item-meta">${f.kcal} kcal · P:${f.protein}g C:${f.carbs}g Fat:${f.fat}g per 100g</div>
+        </div>
+        <div class="food-item-kcal">${f.kcal}</div>
+      </div>`;
+    }).join('');
+  }
+
+  // Yesterday's meals
+  const yesterday = new Date(); yesterday.setDate(yesterday.getDate()-1);
+  const yStr = yesterday.toISOString().slice(0,10);
+  const yLog = state.foodLog?.[yStr];
+  const yDiv = document.getElementById('yesterday-meals-list');
+  if(!yLog||!Object.values(yLog.meals||{}).flat().length){
+    yDiv.innerHTML='<div style="color:var(--text3);font-size:13px;padding:8px 0">Nothing logged yesterday.</div>';
+    return;
+  }
+  const allYItems = Object.entries(yLog.meals||{}).flatMap(([meal,items])=>items.map(i=>({...i,meal})));
+  yDiv.innerHTML = `
+    <button onclick="copyYesterdayMeal('${_fSelectedMeal}')" style="width:100%;background:var(--surface2);border:1px solid var(--border);border-radius:10px;padding:10px;text-align:left;cursor:pointer;margin-bottom:6px">
+      <div style="font-weight:700;font-size:13px">📋 Copy all of yesterday's ${_fSelectedMeal}</div>
+      <div style="font-size:11px;color:var(--text3);margin-top:2px">${(yLog.meals[_fSelectedMeal]||[]).length} items → today's ${_fSelectedMeal}</div>
+    </button>
+    ${allYItems.slice(0,8).map(item=>`<div class="food-item" onclick="openFoodQty('${item.name.replace(/'/g,"\\'")}')">
+      <div style="flex:1;min-width:0">
+        <div class="food-item-name">${item.name} <span style="font-size:10px;color:var(--text3)">${item.meal}</span></div>
+        <div class="food-item-meta">${item.kcal} kcal · ${item.grams||item.amount}g</div>
+      </div>
+      <div class="food-item-kcal">${item.kcal}</div>
+    </div>`).join('')}`;
+}
+
+function copyYesterdayMeal(meal){
+  const yesterday = new Date(); yesterday.setDate(yesterday.getDate()-1);
+  const yStr = yesterday.toISOString().slice(0,10);
+  const yItems = state.foodLog?.[yStr]?.meals?.[meal]||[];
+  if(!yItems.length){toast('Nothing in yesterday\'s '+meal);return;}
+  const log = getFoodLog();
+  if(!log.meals[meal]) log.meals[meal]=[];
+  yItems.forEach(i=>log.meals[meal].push({...i}));
+  state.foodLog[foodDate]=log;
+  saveState({food:foodDate});
+  renderFoodPage();
+  if(homeMode==='food') renderHomeFoodPanel();
+  closeFoodModal();
+  toast('Copied '+yItems.length+' items from yesterday ✓');
+}
+
+// ─── MEAL TEMPLATES ───────────────────────────────────────────────────────────
+function saveMealTemplate(){
+  const log = getFoodLog();
+  const items = log.meals?.[_fSelectedMeal]||[];
+  if(!items.length){toast('No food in '+_fSelectedMeal+' yet — log some first');return;}
+  const name = prompt('Name this template:', _fSelectedMeal.charAt(0).toUpperCase()+_fSelectedMeal.slice(1)+' Meal');
+  if(!name) return;
+  if(!state.mealTemplates) state.mealTemplates=[];
+  state.mealTemplates.push({
+    id:_genId(), name, meal:_fSelectedMeal,
+    items:[...items], createdAt:new Date().toISOString()
+  });
+  saveState({profile:true});
+  renderMealTemplates();
+  toast('Template "'+name+'" saved ✓');
+}
+
+function renderMealTemplates(){
+  const templates = state.mealTemplates||[];
+  const div = document.getElementById('meal-templates-list');
+  // Update save button label
+  const btn = document.querySelector('#food-tab-templates .btn-primary');
+  if(btn) btn.textContent = '💾 Save today\'s '+(_fSelectedMeal||'meal')+' as template';
+  if(!templates.length){
+    div.innerHTML='<div style="color:var(--text3);font-size:13px;padding:8px 0;text-align:center">No templates yet.<br>Log a meal, then save it as a template for one-tap re-logging.</div>';
+    return;
+  }
+  div.innerHTML = templates.map(t=>`
+    <div style="background:var(--surface2);border-radius:10px;padding:10px 12px;margin-bottom:8px">
+      <div style="display:flex;justify-content:space-between;align-items:start">
+        <div>
+          <div style="font-weight:700;font-size:14px">${t.name}</div>
+          <div style="font-size:11px;color:var(--text3);margin-top:2px">${t.items.length} items · ${t.items.reduce((a,i)=>a+(i.kcal||0),0)} kcal</div>
+          <div style="font-size:11px;color:var(--text3)">${t.items.slice(0,3).map(i=>i.name).join(', ')}${t.items.length>3?'…':''}</div>
+        </div>
+        <div style="display:flex;gap:6px;flex-shrink:0;margin-left:8px">
+          <button onclick="logTemplate('${t.id}')" style="background:var(--red);color:#fff;border:none;border-radius:8px;padding:6px 10px;font-size:12px;font-weight:700;cursor:pointer">Log</button>
+          <button onclick="deleteTemplate('${t.id}')" style="background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:6px 8px;font-size:12px;cursor:pointer;color:var(--text3)">🗑</button>
+        </div>
+      </div>
+    </div>`).join('');
+}
+
+function logTemplate(id){
+  const t = (state.mealTemplates||[]).find(x=>x.id===id);
+  if(!t){toast('Template not found');return;}
+  const log = getFoodLog();
+  if(!log.meals[_fSelectedMeal]) log.meals[_fSelectedMeal]=[];
+  t.items.forEach(i=>log.meals[_fSelectedMeal].push({...i}));
+  state.foodLog[foodDate]=log;
+  saveState({food:foodDate});
+  renderFoodPage();
+  if(homeMode==='food') renderHomeFoodPanel();
+  closeFoodModal();
+  toast('Logged "'+t.name+'" · '+t.items.reduce((a,i)=>a+(i.kcal||0),0)+' kcal 🎉');
+}
+
+function deleteTemplate(id){
+  state.mealTemplates=(state.mealTemplates||[]).filter(t=>t.id!==id);
+  saveState({profile:true});
+  renderMealTemplates();
+}
+
+// ─── AI MEAL GUESSER + PHOTO ──────────────────────────────────────────────────
+let _foodPhotoBase64 = null;
+
+function previewFoodPhoto(event){
+  const file = event.target.files[0];
+  if(!file) return;
+  const reader = new FileReader();
+  reader.onload = e=>{
+    _foodPhotoBase64 = e.target.result.split(',')[1];
+    const prev = document.getElementById('food-photo-preview');
+    prev.innerHTML = `<img src="${e.target.result}" style="max-height:80px;max-width:100%;border-radius:8px;object-fit:cover">`;
+  };
+  reader.readAsDataURL(file);
+}
+
+async function runAIMealGuess(){
+  const desc = document.getElementById('ai-food-inp').value.trim();
+  if(!desc && !_foodPhotoBase64){toast('Describe your meal or upload a photo first');return;}
+  const btn = document.getElementById('ai-food-btn');
+  const resultsDiv = document.getElementById('ai-food-results');
+  btn.textContent = '🤖 Analysing…'; btn.disabled = true;
+  resultsDiv.innerHTML = '<div style="text-align:center;padding:20px;color:var(--text3);font-size:13px">AI is figuring out your meal…</div>';
+
+  // Build food list context (top 100 by name for the prompt)
+  const foodNames = FOOD_DB.slice(0,300).map(f=>f.name).join(', ');
+
+  const userContent = [];
+  if(_foodPhotoBase64){
+    userContent.push({type:'image',source:{type:'base64',media_type:'image/jpeg',data:_foodPhotoBase64}});
+  }
+  userContent.push({type:'text',text:`You are a nutrition assistant for an Indian fitness app. 
+The user ${_foodPhotoBase64?'has uploaded a food photo and says:':'describes their meal as:'} "${desc||'See the photo'}"
+
+Match these foods to our database when possible: ${foodNames}
+
+Return ONLY valid JSON (no markdown, no explanation):
+{"foods":[{"name":"exact name from db or best guess","grams":100,"confidence":"high/medium/low","note":"optional"}]}
+
+Rules:
+- Use exact names from the database when possible
+- Estimate realistic portions (e.g. idli=40g, sambar=150ml, coffee=120ml)
+- If something isn't in the DB, still include it with best guess name
+- Be realistic about Indian portions`});
+
+  try{
+    const resp = await fetch('https://api.anthropic.com/v1/messages',{
+      method:'POST',
+      headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({
+        model:'claude-sonnet-4-20250514',
+        max_tokens:1000,
+        messages:[{role:'user',content:userContent}]
+      })
+    });
+    const data = await resp.json();
+    const text = data.content?.find(c=>c.type==='text')?.text||'{}';
+    const clean = text.replace(/```json|```/g,'').trim();
+    const parsed = JSON.parse(clean);
+    renderAIFoodResults(parsed.foods||[]);
+  } catch(e){
+    resultsDiv.innerHTML='<div style="color:var(--red);font-size:13px;padding:12px">Could not analyse meal. Try describing it more specifically.</div>';
+  }
+  btn.textContent='🤖 Guess My Meal →'; btn.disabled=false;
+}
+
+let _aiFoodResults=[];
+function renderAIFoodResults(foods){
+  const resultsDiv=document.getElementById('ai-food-results');
+  if(!foods.length){resultsDiv.innerHTML='<div style="color:var(--text3);font-size:13px;padding:12px;text-align:center">No foods detected. Try describing more specifically.</div>';return;}
+  _aiFoodResults=foods.map(f=>{
+    const match=FOOD_DB.find(x=>x.name.toLowerCase()===f.name.toLowerCase())||
+                FOOD_DB.find(x=>x.name.toLowerCase().includes(f.name.toLowerCase().split('(')[0].trim()))||null;
+    return {...f,dbFood:match};
+  });
+  let html=`<div style="font-size:12px;font-weight:700;color:var(--text3);margin-bottom:8px;text-transform:uppercase">AI found ${_aiFoodResults.length} items — adjust grams if needed:</div>`;
+  _aiFoodResults.forEach((f,i)=>{
+    const db=f.dbFood;
+    const kcal=db?Math.round(db.kcal*f.grams/100):'?';
+    const conf={high:'🟢',medium:'🟡',low:'🔴'}[f.confidence||'medium'];
+    html+=`<div style="background:var(--surface2);border-radius:10px;padding:10px 12px;margin-bottom:6px">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px">
+        <div style="font-weight:600;font-size:13px">${conf} ${f.name}${!db?' <span style="font-size:10px;color:var(--red)">(not in DB)</span>':''}</div>
+        <div style="font-size:12px;color:var(--red);font-weight:700">${kcal} kcal</div>
+      </div>
+      ${f.note?`<div style="font-size:11px;color:var(--text3);margin-bottom:4px">${f.note}</div>`:''}
+      <div style="display:flex;align-items:center;gap:6px">
+        <span style="font-size:12px;color:var(--text3)">Amount:</span>
+        <input type="number" value="${f.grams}" inputmode="numeric" data-ai="${i}"
+          style="width:70px;padding:5px 8px;border:1px solid var(--border);border-radius:7px;background:var(--surface);color:var(--text);font-size:13px;text-align:center"
+          oninput="updateAIItem(${i},this.value)">
+        <span style="font-size:12px;color:var(--text3)">g</span>
+      </div>
+    </div>`;
+  });
+  const logCount=_aiFoodResults.filter(f=>f.dbFood).length;
+  html+=`<button class="btn-primary" onclick="logAIFoods()" style="width:100%;font-size:15px;padding:13px;margin-top:4px">
+    ✓ Log ${logCount} matched foods${_aiFoodResults.length>logCount?' ('+(_aiFoodResults.length-logCount)+' skipped)':''}
+  </button>`;
+  resultsDiv.innerHTML=html;
+}
+
+function updateAIItem(i,val){ if(_aiFoodResults[i]) _aiFoodResults[i].grams=parseFloat(val)||100; }
+
+function logAIFoods(){
+  const log=getFoodLog();
+  if(!log.meals[_fSelectedMeal]) log.meals[_fSelectedMeal]=[];
+  let count=0,totalKcal=0;
+  _aiFoodResults.forEach(f=>{
+    if(!f.dbFood) return;
+    const g=f.grams||100;
+    log.meals[_fSelectedMeal].push({
+      name:f.dbFood.name,grams:g,unit:'g',amount:g,
+      kcal:Math.round(f.dbFood.kcal*g/100),
+      protein:parseFloat((f.dbFood.protein*g/100).toFixed(1)),
+      carbs:parseFloat((f.dbFood.carbs*g/100).toFixed(1)),
+      fat:parseFloat((f.dbFood.fat*g/100).toFixed(1)),
+      fibre:parseFloat((f.dbFood.fibre*g/100).toFixed(1))
+    });
+    learnFrequentFood(f.dbFood.name);
+    totalKcal+=Math.round(f.dbFood.kcal*g/100);
+    count++;
+  });
+  state.foodLog[foodDate]=log;
+  saveState({food:foodDate});
+  renderFoodPage();
+  if(homeMode==='food') renderHomeFoodPanel();
+  closeFoodModal();
+  _aiFoodResults=[];
+  _foodPhotoBase64=null;
+  toast('Logged '+count+' foods · '+totalKcal+' kcal 🎉');
+}
 let _communityFoods=[]; // cached community foods
 let _communityFoodsLoaded=false;
 

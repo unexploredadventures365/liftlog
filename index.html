@@ -6769,4 +6769,352 @@ async function syncToSupabase(){
     // Weight log (only if changed)
     if(_dirty.weightLog){
       const wl=(state.weightLog||[]).map(e=>({
-        user_id:uid, date:e.date, weight
+        user_id:uid, date:e.date, weight_kg:e.kg, note:e.note||''
+      }));
+      if(wl.length) p.push(_sb.from('weight_log').upsert(wl,{onConflict:'user_id,date'}));
+    }
+
+    // Only changed food dates
+    if(_dirty.foodDates.size>0){
+      const fl=state.foodLog||{};
+      const foodRows=[..._dirty.foodDates]
+        .filter(date=>fl[date])
+        .map(date=>({
+          user_id:uid, date,
+          meals:fl[date].meals||{},
+          water_ml:fl[date].water||0
+        }));
+      if(foodRows.length)
+        p.push(_sb.from('food_log').upsert(foodRows,{onConflict:'user_id,date'}));
+    }
+
+    // Only changed step dates
+    if(_dirty.stepDates.size>0){
+      const sl=state.stepLog||{};
+      const stepRows=[..._dirty.stepDates]
+        .filter(date=>sl[date]>0)
+        .map(date=>({user_id:uid, date, steps:sl[date]}));
+      if(stepRows.length)
+        p.push(_sb.from('step_log').upsert(stepRows,{onConflict:'user_id,date'}));
+    }
+
+    // Custom foods (only if changed)
+    if(_dirty.customFoods){
+      const cf=(state.customFoods||[]).map(f=>({user_id:uid, food_data:f}));
+      if(cf.length)
+        p.push(_sb.from('custom_foods').upsert(cf,{onConflict:'user_id,(food_data->>\'name\')'}));
+    }
+
+    if(p.length===0 && _dirty.workouts.size===0 && _dirty.deletedWorkouts.size===0){
+      // Nothing dirty — skip
+      setSyncDot('ok');
+      return;
+    }
+
+    await Promise.all(p);
+    clearDirty();
+    _lastSyncTime = new Date();
+    setSyncDot('ok');
+    document.getElementById('save-status').textContent='☁ Synced';
+  } catch(e){
+    console.warn('Sync error:',e);
+    setSyncDot('error');
+    document.getElementById('save-status').textContent='✓ Local';
+  }
+}
+
+// ── Sync: pull Supabase → local state ────────────────────────────────────────
+async function syncFromSupabase(){
+  if(!_sb || !_sbUser) return;
+  setSyncDot('syncing');
+  try{
+    const uid = _sbUser.id;
+
+    // Profile
+    const {data:prof} = await _sb.from('profiles').select('*').eq('id',uid).single();
+    if(prof){
+      if(prof.cal_profile) state.calProfile = prof.cal_profile;
+      if(prof.step_goal)   state.stepGoal   = prof.step_goal;
+      if(prof.streak)      state.streak     = prof.streak;
+    }
+
+    // Workouts
+    const {data:wkts} = await _sb.from('workouts').select('*').eq('user_id',uid).order('date',{ascending:true});
+    if(wkts&&wkts.length){
+      state.workoutHistory = wkts.map(w=>({
+        id:w.id,
+        // Supabase date columns can include timezone offset — always slice to YYYY-MM-DD
+        date: (w.date||'').slice(0,10),
+        exercises:w.exercises||[],
+        totalVolume:w.total_volume||0,
+        totalKcal:w.total_kcal||0,
+        duration:w.duration||0
+      }));
+    }
+
+    // Active session — only restore if it's actually today's session
+    const {data:sess} = await _sb.from('active_session').select('*').eq('user_id',uid).single();
+    if(sess&&sess.exercises&&sess.exercises.length){
+      const savedDate = (sess.exercise_date||'').slice(0,10);
+      const today = todayStr();
+      if(savedDate===today){
+        // Today's in-progress session — restore it
+        state.exercises = sess.exercises;
+        state.exerciseDate = today;
+      }
+      // If it's a past date — do NOT load it. Start the day clean.
+      // Past workouts are in workoutHistory, not here.
+    }
+
+    // Weight log
+    const {data:wl} = await _sb.from('weight_log').select('*').eq('user_id',uid).order('date');
+    if(wl) state.weightLog = wl.map(e=>({
+      date:(e.date||'').slice(0,10),
+      kg:parseFloat(e.weight_kg),
+      note:e.note||''
+    }));
+
+    // Food log
+    const {data:fl} = await _sb.from('food_log').select('*').eq('user_id',uid);
+    if(fl){
+      state.foodLog = {};
+      fl.forEach(r=>{
+        const d=(r.date||'').slice(0,10);
+        if(d) state.foodLog[d] = {meals:r.meals||{}, water:r.water_ml||0};
+      });
+    }
+
+    // Step log
+    const {data:sl} = await _sb.from('step_log').select('*').eq('user_id',uid);
+    if(sl){
+      state.stepLog = {};
+      sl.forEach(r=>{
+        const d=(r.date||'').slice(0,10);
+        if(d) state.stepLog[d] = r.steps||0;
+      });
+    }
+
+    // Exercise memory
+    const {data:em} = await _sb.from('exercise_memory').select('*').eq('user_id',uid).single();
+    if(em&&em.memory) {
+      state.exerciseMemory = em.memory;
+    }
+
+    // Custom foods
+    const {data:cfd} = await _sb.from('custom_foods').select('*').eq('user_id',uid);
+    if(cfd&&cfd.length){
+      state.customFoods = cfd.map(r=>r.food_data);
+      state.customFoods.forEach(f=>{
+        if(!FOOD_DB.find(x=>x.name===f.name)) FOOD_DB.push(f);
+      });
+    }
+
+    // Save to localStorage as offline cache (use original to avoid triggering upload)
+    _origSaveState();
+    // Re-inject custom exercises into library from updated memory + history
+    loadCustomExercisesIntoDB();
+    _lastSyncTime = new Date();
+    setSyncDot('ok');
+    document.getElementById('save-status').textContent='☁ Synced';
+  } catch(e){
+    console.warn('Fetch error:',e);
+    setSyncDot('error');
+    // Fall back to localStorage
+    loadState();
+  }
+}
+
+// ── Patch saveState to mark dirty + debounce sync ────────────────────────────
+(function(){
+  const _orig = saveState;
+  saveState = function(dirtyHint){
+    _orig();
+    if(_sbUser && !_offlineMode){
+      // Mark what changed based on hint passed by callers
+      if(dirtyHint){
+        if(dirtyHint.workout)        markDirty('workout', dirtyHint.workout);
+        if(dirtyHint.deletedWorkout) markDirty('deletedWorkout', dirtyHint.deletedWorkout);
+        if(dirtyHint.food)           markDirty('food', dirtyHint.food);
+        if(dirtyHint.step)           markDirty('step', dirtyHint.step);
+        if(dirtyHint.profile)        markDirty('profile');
+        if(dirtyHint.weight)         markDirty('weightLog');
+        if(dirtyHint.customFood)     markDirty('customFoods');
+        if(dirtyHint.memory)         markDirty('exerciseMemory');
+      } else {
+        // No hint = mark everything dirty (full sync)
+        _dirty.profile=true; _dirty.activeSession=true;
+        _dirty.exerciseMemory=true; _dirty.weightLog=true; _dirty.customFoods=true;
+        (state.workoutHistory||[]).forEach(w=>_dirty.workouts.add(w.id));
+        Object.keys(state.foodLog||{}).forEach(d=>_dirty.foodDates.add(d));
+        Object.keys(state.stepLog||{}).forEach(d=>_dirty.stepDates.add(d));
+      }
+      // Always mark active session dirty (fast, small)
+      _dirty.activeSession=true;
+      clearTimeout(_syncDebounceTimer);
+      setSyncDot('pending'); // will show count immediately
+      _syncDebounceTimer = setTimeout(syncToSupabase, 5000); // 5s debounce
+    }
+  };
+})();
+
+// ── Sync indicator dot ────────────────────────────────────────────────────────
+function getSyncPendingCount(){
+  return _dirty.workouts.size + _dirty.deletedWorkouts.size +
+    _dirty.foodDates.size + _dirty.stepDates.size +
+    (_dirty.profile?1:0) + (_dirty.activeSession?1:0) +
+    (_dirty.weightLog?1:0) + (_dirty.customFoods?1:0) +
+    (_dirty.exerciseMemory?1:0);
+}
+
+function setSyncDot(status, extra){
+  const dot = document.getElementById('sync-dot');
+  if(!dot) return;
+  dot.style.display = 'block';
+  const styles = {
+    ok:      'background:#22c55e;color:#fff',
+    syncing: 'background:#f97316;color:#fff',
+    error:   'background:var(--red);color:#fff',
+    pending: 'background:#eab308;color:#000'
+  };
+  dot.style.cssText = `display:inline-flex;align-items:center;border-radius:999px;padding:2px 7px;font-size:10px;font-weight:700;cursor:default;flex-shrink:0;${styles[status]||styles.ok}`;
+  const count = getSyncPendingCount();
+  const labels = {
+    ok:      '✓ Synced',
+    syncing: '↑ Syncing…',
+    error:   '⚠ Error',
+    pending: count > 0 ? `↑ ${count} pending` : '↑ Pending'
+  };
+  dot.textContent = labels[status] || '✓ Synced';
+  dot.title = {
+    ok:'All data synced to cloud',
+    syncing:'Uploading changes…',
+    error:'Sync failed — data saved locally, will retry',
+    pending:`${count} change${count!==1?'s':''} waiting to upload`
+  }[status]||'';
+}
+
+async function syncNow(){
+  document.getElementById('user-menu').style.display = 'none';
+  toast('Syncing from cloud…');
+  await syncFromSupabase();
+  renderAll();
+  renderWorkoutPage();
+  // Re-render active page
+  const activePage=document.querySelector('.page.active');
+  if(activePage){
+    const pageName=activePage.id.replace('page-','');
+    if(pageName==='progress') renderProgress();
+    if(pageName==='records') renderRecordsPage();
+    if(pageName==='food') renderFoodPage();
+    if(pageName==='weight') renderWeightPage();
+  }
+  toast('Synced ✓ All data up to date');
+}
+
+// ── Init: check auth state and boot app ───────────────────────────────────────
+async function initSupabase(){
+  if(!_sb){
+    // Not configured — just run locally
+    loadState(); renderAll(); initTelegram();
+    return;
+  }
+
+  // Listen for auth state changes (fires on login, logout, token refresh)
+  _sb.auth.onAuthStateChange(async (event, session)=>{
+    if(event==='SIGNED_OUT'){
+      _sbUser = null;
+      document.getElementById('auth-screen').style.display = 'block';
+      return;
+    }
+    if(session?.user){
+      _sbUser = session.user;
+      document.getElementById('auth-screen').style.display = 'none';
+
+      // Update user avatar
+      const name = session.user.user_metadata?.full_name || session.user.email.split('@')[0];
+      const initials = name.split(' ').map(w=>w[0]).join('').slice(0,2).toUpperCase();
+      const avatarBtn = document.getElementById('user-avatar-btn');
+      avatarBtn.textContent = initials;
+      avatarBtn.style.display = 'block';
+      document.getElementById('sync-dot').style.display = 'block';
+      document.getElementById('user-menu-name').textContent = name;
+      document.getElementById('user-menu-email').textContent = session.user.email;
+
+      // Only do full sync on SIGNED_IN or initial load, not on every token refresh
+      if(event==='SIGNED_IN' || event==='INITIAL_SESSION'){
+        // Show local data instantly
+        loadState();
+        renderAll();
+        initTelegram();
+        setSyncDot('syncing');
+        document.getElementById('save-status').textContent='☁ Syncing…';
+
+        // Pull from Supabase first
+        await syncFromSupabase();
+
+        // If Supabase had no workouts but we have local data → push everything up
+        // This handles first-time sync for existing users
+        const localHist=state.workoutHistory||[];
+        if(localHist.length>0){
+          try{
+            const {data:existing}=await _sb.from('workouts')
+              .select('id').eq('user_id',_sbUser.id).limit(1);
+            const supabaseEmpty=!existing||existing.length===0;
+            if(supabaseEmpty){
+              // First time — push all local workouts to cloud
+              setSyncDot('syncing');
+              document.getElementById('save-status').textContent='☁ First sync…';
+              const uid=_sbUser.id;
+              // Batch in groups of 50
+              for(let i=0;i<localHist.length;i+=50){
+                const batch=localHist.slice(i,i+50).map(w=>({
+                  id:w.id,user_id:uid,date:w.date,
+                  exercises:w.exercises,
+                  total_volume:w.totalVolume||0,
+                  total_kcal:w.totalKcal||0,
+                  duration:w.duration||0
+                }));
+                await _sb.from('workouts').upsert(batch);
+              }
+              toast('All '+localHist.length+' workouts uploaded to cloud ✓');
+            }
+          }catch(e){console.warn('First-sync upload error:',e);}
+        }
+
+        // Full re-render of everything with fresh cloud data
+        renderAll();
+        renderWorkoutPage();
+        renderWeightPage();
+        updateDataPage();
+        renderCaloriesPage();
+        // Re-render current active page
+        const activePage=document.querySelector('.page.active');
+        if(activePage){
+          const pageName=activePage.id.replace('page-','');
+          if(pageName==='progress') renderProgress();
+          if(pageName==='records') renderRecordsPage();
+          if(pageName==='report') showReport(reportPeriod);
+          if(pageName==='food'){renderFoodPage();}
+          if(pageName==='steps') renderStepsPanel();
+        }
+        setSyncDot('ok');
+        document.getElementById('save-status').textContent='☁ Synced';
+        toast('Welcome back, '+name.split(' ')[0]+'! ☁');
+      }
+    }
+  });
+
+  // Check existing session immediately
+  const {data:{session}} = await _sb.auth.getSession();
+  if(!session){
+    // No session — show auth screen but render app underneath
+    loadState(); renderAll(); initTelegram();
+    document.getElementById('auth-screen').style.display = 'block';
+  }
+  // If session exists, onAuthStateChange fires with INITIAL_SESSION automatically
+}
+
+loadState();renderAll();initTelegram();initSupabase();
+</script>
+</body>
+</html>

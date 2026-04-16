@@ -564,6 +564,12 @@ select.inp{cursor:pointer}
       <button class="btn-outline" onclick="openLibrary()" style="flex:1" id="add-ex-btn">+ Exercise</button>
       <button class="btn-outline" onclick="openCommunityWorkouts()" title="Browse community workouts" style="padding:10px 12px;flex-shrink:0">🌍</button>
     </div>
+    <!-- Smart suggestion button — shown when session is empty -->
+    <div id="smart-suggest-bar" style="margin-bottom:10px">
+      <button onclick="openSmartSuggest()" style="width:100%;background:linear-gradient(135deg,var(--red),#f97316);color:#fff;border:none;border-radius:12px;padding:13px 16px;font-family:var(--font-cond);font-weight:900;font-size:16px;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:8px;letter-spacing:.3px">
+        💪 What am I training today?
+      </button>
+    </div>
     <div class="view-toggle">
       <button class="view-btn active" id="vbtn-week" onclick="setView('week')">This Week</button>
       <button class="view-btn" id="vbtn-calendar" onclick="setView('calendar')">Calendar</button>
@@ -1192,6 +1198,36 @@ select.inp{cursor:pointer}
     </div>
   </div>
 
+  <!-- SMART WORKOUT SUGGEST MODAL -->
+  <div class="modal-overlay" id="smart-suggest-modal" style="display:none" onclick="if(event.target===this)closeSmartSuggest()">
+    <div class="modal-sheet" style="max-height:92vh;display:flex;flex-direction:column;overflow:hidden">
+      <div class="modal-handle" style="flex-shrink:0"></div>
+      <div class="modal-header" style="flex-shrink:0">
+        <div class="modal-title">💪 Today's Workout</div>
+        <button class="modal-close" onclick="closeSmartSuggest()">×</button>
+      </div>
+      <!-- Step 1: Muscle group picker -->
+      <div id="ss-step1" style="padding:16px;overflow-y:auto;flex:1">
+        <div style="font-size:13px;color:var(--text2);margin-bottom:12px">Pick the muscle groups you're training today:</div>
+        <div id="ss-muscle-chips" style="display:flex;flex-wrap:wrap;gap:8px;margin-bottom:16px"></div>
+        <button class="btn-primary" onclick="generateSuggestions()" id="ss-generate-btn" style="width:100%;font-size:15px;padding:13px;opacity:.4" disabled>
+          Show My Exercises →
+        </button>
+      </div>
+      <!-- Step 2: Suggested exercises -->
+      <div id="ss-step2" style="display:none;flex-direction:column;flex:1;min-height:0;overflow:hidden">
+        <div style="padding:12px 16px;border-bottom:1px solid var(--border);flex-shrink:0">
+          <div id="ss-subtitle" style="font-size:12px;color:var(--text3)"></div>
+        </div>
+        <div id="ss-exercise-list" style="overflow-y:auto;flex:1;padding:8px 16px"></div>
+        <div style="padding:12px 16px;border-top:1px solid var(--border);flex-shrink:0;display:flex;gap:8px">
+          <button onclick="showStep1()" style="flex:1;background:var(--surface2);border:1px solid var(--border);border-radius:10px;padding:11px;font-size:13px;font-weight:700;cursor:pointer;color:var(--text2)">← Change</button>
+          <button onclick="addAllSuggested()" id="ss-add-all-btn" class="btn-primary" style="flex:2;font-size:14px;padding:11px">Add Selected to Workout</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
   <!-- FOOD QUANTITY MODAL -->
   <div class="modal-overlay" id="food-qty-modal" style="display:none" onclick="if(event.target===this)document.getElementById('food-qty-modal').style.display='none'">
     <div class="modal-sheet" style="max-height:88vh;display:flex;flex-direction:column">
@@ -1458,10 +1494,12 @@ function loadState(){
       const savedDate=s.exerciseDate||null;
       const today=todayStr();
       if(savedDate===today){
+        // Only restore if it's actually today's session
         state.exercises=s.exercises;
         state.exerciseDate=today;
       } else {
-        state.exercises=s.exercises.map(ex=>({...ex,sets:ex.sets.map(st=>({...st,done:false}))}));
+        // Different day — start fresh, don't pull old workout in
+        state.exercises=[];
         state.exerciseDate=today;
       }
     }
@@ -1869,6 +1907,10 @@ function renderExercises(){
   let td=0,ts=0,tv=0;
   const bw=state.calProfile.wt||75;
 
+  // Show/hide the smart suggest bar
+  const ssBar = document.getElementById('smart-suggest-bar');
+  if(ssBar) ssBar.style.display = state.exercises.length===0 ? 'block' : 'none';
+
   // Empty state — show when no exercises added yet today
   if(!state.exercises.length){
     c.innerHTML=`
@@ -2082,7 +2124,15 @@ function saveWorkout(){
   // Reset selectedDate to today so the workout page shows today's section
   selectedDate=null;
   resetTimer();
-  saveState({workout:entry.id, profile:true, memory:true});
+  saveState({workout:entry.id, profile:true, memory:true, activeSession:true});
+  // Clear active session in Supabase so yesterday's session doesn't bleed into tomorrow
+  if(_sb && _sbUser){
+    _sb.from('active_session').upsert({
+      user_id:_sbUser.id,
+      exercises:[],
+      exercise_date:todayStr()
+    }).catch(()=>{});
+  }
   renderWorkoutPage();
   toast('Workout saved! 💪 '+totalKcal+' kcal burned');
 }
@@ -5633,6 +5683,163 @@ function addCustomFood(){
   if(!isPublic) toast('"'+name+'" saved! '+kcal+' kcal · P:'+protein+'g C:'+carbs+'g Fat:'+fat+'g Fibre:'+fibre+'g');
 }
 
+// ─── SMART WORKOUT SUGGESTER ──────────────────────────────────────────────────
+const MUSCLE_GROUPS_SS = ['Chest','Back','Shoulders','Biceps','Triceps','Legs','Glutes','Hamstrings','Calves','Abs','Cardio','Forearms'];
+const MUSCLE_EMOJIS_SS = {Chest:'🏋️',Back:'🔙',Shoulders:'🔺',Biceps:'💪',Triceps:'🔩',Legs:'🦵',Glutes:'🍑',Hamstrings:'🦿',Calves:'🦶',Abs:'⚡',Cardio:'🏃',Forearms:'✊'};
+
+let _ssSelected = new Set();
+let _ssSuggestions = [];
+
+function openSmartSuggest(){
+  _ssSelected = new Set();
+  _ssSuggestions = [];
+  document.getElementById('smart-suggest-modal').style.display='flex';
+  showStep1();
+  renderMuscleChipsSS();
+}
+function closeSmartSuggest(){
+  document.getElementById('smart-suggest-modal').style.display='none';
+}
+function showStep1(){
+  document.getElementById('ss-step1').style.display='block';
+  document.getElementById('ss-step2').style.display='none';
+}
+function renderMuscleChipsSS(){
+  const wrap=document.getElementById('ss-muscle-chips');
+  wrap.innerHTML=MUSCLE_GROUPS_SS.map(m=>`
+    <button onclick="toggleMuscleChipSS('${m}')" id="ss-chip-${m}"
+      style="padding:8px 14px;border-radius:20px;border:2px solid var(--border);background:var(--surface2);
+             color:var(--text2);font-family:var(--font-cond);font-weight:700;font-size:14px;cursor:pointer;transition:all .15s">
+      ${MUSCLE_EMOJIS_SS[m]||'•'} ${m}
+    </button>`).join('');
+}
+function toggleMuscleChipSS(m){
+  const btn=document.getElementById('ss-chip-'+m);
+  if(_ssSelected.has(m)){
+    _ssSelected.delete(m);
+    btn.style.background='var(--surface2)';
+    btn.style.borderColor='var(--border)';
+    btn.style.color='var(--text2)';
+  } else {
+    _ssSelected.add(m);
+    btn.style.background='var(--red)';
+    btn.style.borderColor='var(--red)';
+    btn.style.color='#fff';
+  }
+  const genBtn=document.getElementById('ss-generate-btn');
+  genBtn.disabled=_ssSelected.size===0;
+  genBtn.style.opacity=_ssSelected.size>0?'1':'0.4';
+}
+function generateSuggestions(){
+  if(_ssSelected.size===0) return;
+  const muscles=[..._ssSelected];
+  const today=todayStr();
+  const mem=state.exerciseMemory||{};
+  const pool=[];
+  muscles.forEach(muscle=>{
+    const dbExercises=EXERCISE_DB[muscle]||[];
+    dbExercises.forEach(ex=>{
+      const key=ex.name.toUpperCase();
+      const memData=mem[key]||{};
+      const sessionCount=memData.count||0;
+      let lastWeight=0,lastReps=0,lastDate=null;
+      for(let i=state.workoutHistory.length-1;i>=0;i--){
+        const w=state.workoutHistory[i];
+        const found=w.exercises.find(e=>e.name.toUpperCase()===key);
+        if(found&&found.sets.length){
+          lastWeight=found.sets[found.sets.length-1].w||0;
+          lastReps=found.sets[found.sets.length-1].r||0;
+          lastDate=w.date;
+          break;
+        }
+      }
+      const daysSince=lastDate?Math.floor((new Date(today)-new Date(lastDate))/86400000):999;
+      let score=0;
+      if(sessionCount>0) score+=Math.min(sessionCount*2,20);
+      if(daysSince>7) score+=15;
+      else if(daysSince>3) score+=8;
+      else if(daysSince<=1) score-=10;
+      const name=ex.name.toLowerCase();
+      if(/(squat|deadlift|bench|row|press|pull.up|chin.up)/.test(name)) score+=10;
+      pool.push({exercise:ex,muscle,sessionCount,lastWeight,lastReps,lastDate,daysSince,score,selected:true});
+    });
+  });
+  if(!pool.length){toast('No exercises found for selected muscles');return;}
+  pool.sort((a,b)=>b.score-a.score);
+  const perMuscle={};
+  const final=[];
+  pool.forEach(p=>{
+    if(!perMuscle[p.muscle]) perMuscle[p.muscle]=0;
+    const maxPerMuscle=muscles.length===1?6:3;
+    if(perMuscle[p.muscle]<maxPerMuscle&&final.length<10){
+      perMuscle[p.muscle]++;
+      final.push(p);
+    }
+  });
+  _ssSuggestions=final;
+  document.getElementById('ss-step1').style.display='none';
+  document.getElementById('ss-step2').style.display='flex';
+  document.getElementById('ss-subtitle').textContent=muscles.join(' + ')+' · '+final.length+' exercises — tap to deselect';
+  renderSuggestions();
+}
+function renderSuggestions(){
+  const list=document.getElementById('ss-exercise-list');
+  if(!_ssSuggestions.length){
+    list.innerHTML='<div style="text-align:center;padding:20px;color:var(--text3)">No exercises found. Add some via the library first.</div>';
+    return;
+  }
+  list.innerHTML=_ssSuggestions.map((p,i)=>{
+    const hasHistory=p.lastDate!==null;
+    const lastStr=hasHistory?'Last: '+p.lastDate.slice(5)+' · '+p.lastWeight+'kg × '+p.lastReps:'No history yet';
+    const badge=p.daysSince<=1
+      ?'<span style="font-size:9px;background:#eab308;color:#000;padding:2px 5px;border-radius:4px;font-weight:700;margin-left:5px">RECENT</span>'
+      :p.daysSince>14
+      ?'<span style="font-size:9px;background:#6366f1;color:#fff;padding:2px 5px;border-radius:4px;font-weight:700;margin-left:5px">OVERDUE</span>'
+      :'';
+    return `<div id="ss-item-${i}" onclick="toggleSuggestion(${i})"
+      style="display:flex;align-items:center;gap:10px;padding:10px 12px;margin-bottom:6px;border-radius:10px;cursor:pointer;transition:all .15s;
+             background:${p.selected?'rgba(226,75,74,.08)':'var(--surface2)'};border:2px solid ${p.selected?'var(--red)':'transparent'}">
+      <div style="width:24px;height:24px;border-radius:50%;flex-shrink:0;background:${p.selected?'var(--red)':'var(--surface)'};border:2px solid ${p.selected?'var(--red)':'var(--border)'};display:flex;align-items:center;justify-content:center;color:#fff;font-size:13px;font-weight:700">${p.selected?'✓':''}</div>
+      <div style="flex:1;min-width:0">
+        <div style="font-weight:700;font-size:14px">${p.exercise.name}${badge}</div>
+        <div style="font-size:11px;color:var(--text3);margin-top:2px">${p.muscle} · ${lastStr}${p.sessionCount>0?' · '+p.sessionCount+'x done':''}</div>
+      </div>
+    </div>`;
+  }).join('');
+  updateAddAllBtn();
+}
+function toggleSuggestion(i){
+  _ssSuggestions[i].selected=!_ssSuggestions[i].selected;
+  renderSuggestions();
+}
+function updateAddAllBtn(){
+  const count=_ssSuggestions.filter(p=>p.selected).length;
+  const btn=document.getElementById('ss-add-all-btn');
+  if(!btn) return;
+  btn.textContent=count>0?'Add '+count+' Exercise'+(count>1?'s':'')+' to Workout':'None selected';
+  btn.disabled=count===0;
+  btn.style.opacity=count>0?'1':'0.5';
+}
+function addAllSuggested(){
+  const toAdd=_ssSuggestions.filter(p=>p.selected);
+  if(!toAdd.length){toast('Select at least one exercise');return;}
+  toAdd.forEach(p=>{
+    if(state.exercises.some(e=>e.name.toUpperCase()===p.exercise.name.toUpperCase())) return;
+    const sets=p.lastWeight>0
+      ?[{w:p.lastWeight,r:p.lastReps||8,done:false},{w:p.lastWeight,r:p.lastReps||8,done:false},{w:p.lastWeight,r:p.lastReps||8,done:false}]
+      :[{w:0,r:10,done:false},{w:0,r:10,done:false},{w:0,r:10,done:false}];
+    state.exercises.push({name:p.exercise.name,muscle:p.muscle,met:p.exercise.met||5,sets});
+    state.expanded[state.exercises.length-1]=true;
+    learnExercise(p.exercise.name.toUpperCase(),p.muscle,p.exercise.met||5);
+  });
+  autoSave();
+  closeSmartSuggest();
+  renderExercises();
+  const bar=document.getElementById('smart-suggest-bar');
+  if(bar) bar.style.display='none';
+  toast('Added '+toAdd.length+' exercise'+(toAdd.length>1?'s':'')+' — let\'s go! 💪');
+}
+
 // ─── FOOD TAB SWITCHER ────────────────────────────────────────────────────────
 let _activeFoodTab = 'search';
 function setFoodTab(tab){
@@ -6562,352 +6769,4 @@ async function syncToSupabase(){
     // Weight log (only if changed)
     if(_dirty.weightLog){
       const wl=(state.weightLog||[]).map(e=>({
-        user_id:uid, date:e.date, weight_kg:e.kg, note:e.note||''
-      }));
-      if(wl.length) p.push(_sb.from('weight_log').upsert(wl,{onConflict:'user_id,date'}));
-    }
-
-    // Only changed food dates
-    if(_dirty.foodDates.size>0){
-      const fl=state.foodLog||{};
-      const foodRows=[..._dirty.foodDates]
-        .filter(date=>fl[date])
-        .map(date=>({
-          user_id:uid, date,
-          meals:fl[date].meals||{},
-          water_ml:fl[date].water||0
-        }));
-      if(foodRows.length)
-        p.push(_sb.from('food_log').upsert(foodRows,{onConflict:'user_id,date'}));
-    }
-
-    // Only changed step dates
-    if(_dirty.stepDates.size>0){
-      const sl=state.stepLog||{};
-      const stepRows=[..._dirty.stepDates]
-        .filter(date=>sl[date]>0)
-        .map(date=>({user_id:uid, date, steps:sl[date]}));
-      if(stepRows.length)
-        p.push(_sb.from('step_log').upsert(stepRows,{onConflict:'user_id,date'}));
-    }
-
-    // Custom foods (only if changed)
-    if(_dirty.customFoods){
-      const cf=(state.customFoods||[]).map(f=>({user_id:uid, food_data:f}));
-      if(cf.length)
-        p.push(_sb.from('custom_foods').upsert(cf,{onConflict:'user_id,(food_data->>\'name\')'}));
-    }
-
-    if(p.length===0 && _dirty.workouts.size===0 && _dirty.deletedWorkouts.size===0){
-      // Nothing dirty — skip
-      setSyncDot('ok');
-      return;
-    }
-
-    await Promise.all(p);
-    clearDirty();
-    _lastSyncTime = new Date();
-    setSyncDot('ok');
-    document.getElementById('save-status').textContent='☁ Synced';
-  } catch(e){
-    console.warn('Sync error:',e);
-    setSyncDot('error');
-    document.getElementById('save-status').textContent='✓ Local';
-  }
-}
-
-// ── Sync: pull Supabase → local state ────────────────────────────────────────
-async function syncFromSupabase(){
-  if(!_sb || !_sbUser) return;
-  setSyncDot('syncing');
-  try{
-    const uid = _sbUser.id;
-
-    // Profile
-    const {data:prof} = await _sb.from('profiles').select('*').eq('id',uid).single();
-    if(prof){
-      if(prof.cal_profile) state.calProfile = prof.cal_profile;
-      if(prof.step_goal)   state.stepGoal   = prof.step_goal;
-      if(prof.streak)      state.streak     = prof.streak;
-    }
-
-    // Workouts
-    const {data:wkts} = await _sb.from('workouts').select('*').eq('user_id',uid).order('date',{ascending:true});
-    if(wkts&&wkts.length){
-      state.workoutHistory = wkts.map(w=>({
-        id:w.id,
-        // Supabase date columns can include timezone offset — always slice to YYYY-MM-DD
-        date: (w.date||'').slice(0,10),
-        exercises:w.exercises||[],
-        totalVolume:w.total_volume||0,
-        totalKcal:w.total_kcal||0,
-        duration:w.duration||0
-      }));
-    }
-
-    // Active session
-    const {data:sess} = await _sb.from('active_session').select('*').eq('user_id',uid).single();
-    if(sess&&sess.exercises&&sess.exercises.length){
-      const savedDate = (sess.exercise_date||'').slice(0,10);
-      const today = todayStr();
-      if(savedDate===today){
-        state.exercises = sess.exercises;
-        state.exerciseDate = today;
-      } else {
-        state.exercises = sess.exercises.map(ex=>({...ex,sets:ex.sets.map(s=>({...s,done:false}))}));
-        state.exerciseDate = today;
-      }
-    }
-
-    // Weight log
-    const {data:wl} = await _sb.from('weight_log').select('*').eq('user_id',uid).order('date');
-    if(wl) state.weightLog = wl.map(e=>({
-      date:(e.date||'').slice(0,10),
-      kg:parseFloat(e.weight_kg),
-      note:e.note||''
-    }));
-
-    // Food log
-    const {data:fl} = await _sb.from('food_log').select('*').eq('user_id',uid);
-    if(fl){
-      state.foodLog = {};
-      fl.forEach(r=>{
-        const d=(r.date||'').slice(0,10);
-        if(d) state.foodLog[d] = {meals:r.meals||{}, water:r.water_ml||0};
-      });
-    }
-
-    // Step log
-    const {data:sl} = await _sb.from('step_log').select('*').eq('user_id',uid);
-    if(sl){
-      state.stepLog = {};
-      sl.forEach(r=>{
-        const d=(r.date||'').slice(0,10);
-        if(d) state.stepLog[d] = r.steps||0;
-      });
-    }
-
-    // Exercise memory
-    const {data:em} = await _sb.from('exercise_memory').select('*').eq('user_id',uid).single();
-    if(em&&em.memory) {
-      state.exerciseMemory = em.memory;
-    }
-
-    // Custom foods
-    const {data:cfd} = await _sb.from('custom_foods').select('*').eq('user_id',uid);
-    if(cfd&&cfd.length){
-      state.customFoods = cfd.map(r=>r.food_data);
-      state.customFoods.forEach(f=>{
-        if(!FOOD_DB.find(x=>x.name===f.name)) FOOD_DB.push(f);
-      });
-    }
-
-    // Save to localStorage as offline cache (use original to avoid triggering upload)
-    _origSaveState();
-    // Re-inject custom exercises into library from updated memory + history
-    loadCustomExercisesIntoDB();
-    _lastSyncTime = new Date();
-    setSyncDot('ok');
-    document.getElementById('save-status').textContent='☁ Synced';
-  } catch(e){
-    console.warn('Fetch error:',e);
-    setSyncDot('error');
-    // Fall back to localStorage
-    loadState();
-  }
-}
-
-// ── Patch saveState to mark dirty + debounce sync ────────────────────────────
-(function(){
-  const _orig = saveState;
-  saveState = function(dirtyHint){
-    _orig();
-    if(_sbUser && !_offlineMode){
-      // Mark what changed based on hint passed by callers
-      if(dirtyHint){
-        if(dirtyHint.workout)        markDirty('workout', dirtyHint.workout);
-        if(dirtyHint.deletedWorkout) markDirty('deletedWorkout', dirtyHint.deletedWorkout);
-        if(dirtyHint.food)           markDirty('food', dirtyHint.food);
-        if(dirtyHint.step)           markDirty('step', dirtyHint.step);
-        if(dirtyHint.profile)        markDirty('profile');
-        if(dirtyHint.weight)         markDirty('weightLog');
-        if(dirtyHint.customFood)     markDirty('customFoods');
-        if(dirtyHint.memory)         markDirty('exerciseMemory');
-      } else {
-        // No hint = mark everything dirty (full sync)
-        _dirty.profile=true; _dirty.activeSession=true;
-        _dirty.exerciseMemory=true; _dirty.weightLog=true; _dirty.customFoods=true;
-        (state.workoutHistory||[]).forEach(w=>_dirty.workouts.add(w.id));
-        Object.keys(state.foodLog||{}).forEach(d=>_dirty.foodDates.add(d));
-        Object.keys(state.stepLog||{}).forEach(d=>_dirty.stepDates.add(d));
-      }
-      // Always mark active session dirty (fast, small)
-      _dirty.activeSession=true;
-      clearTimeout(_syncDebounceTimer);
-      setSyncDot('pending'); // will show count immediately
-      _syncDebounceTimer = setTimeout(syncToSupabase, 5000); // 5s debounce
-    }
-  };
-})();
-
-// ── Sync indicator dot ────────────────────────────────────────────────────────
-function getSyncPendingCount(){
-  return _dirty.workouts.size + _dirty.deletedWorkouts.size +
-    _dirty.foodDates.size + _dirty.stepDates.size +
-    (_dirty.profile?1:0) + (_dirty.activeSession?1:0) +
-    (_dirty.weightLog?1:0) + (_dirty.customFoods?1:0) +
-    (_dirty.exerciseMemory?1:0);
-}
-
-function setSyncDot(status, extra){
-  const dot = document.getElementById('sync-dot');
-  if(!dot) return;
-  dot.style.display = 'block';
-  const styles = {
-    ok:      'background:#22c55e;color:#fff',
-    syncing: 'background:#f97316;color:#fff',
-    error:   'background:var(--red);color:#fff',
-    pending: 'background:#eab308;color:#000'
-  };
-  dot.style.cssText = `display:inline-flex;align-items:center;border-radius:999px;padding:2px 7px;font-size:10px;font-weight:700;cursor:default;flex-shrink:0;${styles[status]||styles.ok}`;
-  const count = getSyncPendingCount();
-  const labels = {
-    ok:      '✓ Synced',
-    syncing: '↑ Syncing…',
-    error:   '⚠ Error',
-    pending: count > 0 ? `↑ ${count} pending` : '↑ Pending'
-  };
-  dot.textContent = labels[status] || '✓ Synced';
-  dot.title = {
-    ok:'All data synced to cloud',
-    syncing:'Uploading changes…',
-    error:'Sync failed — data saved locally, will retry',
-    pending:`${count} change${count!==1?'s':''} waiting to upload`
-  }[status]||'';
-}
-
-async function syncNow(){
-  document.getElementById('user-menu').style.display = 'none';
-  toast('Syncing from cloud…');
-  await syncFromSupabase();
-  renderAll();
-  renderWorkoutPage();
-  // Re-render active page
-  const activePage=document.querySelector('.page.active');
-  if(activePage){
-    const pageName=activePage.id.replace('page-','');
-    if(pageName==='progress') renderProgress();
-    if(pageName==='records') renderRecordsPage();
-    if(pageName==='food') renderFoodPage();
-    if(pageName==='weight') renderWeightPage();
-  }
-  toast('Synced ✓ All data up to date');
-}
-
-// ── Init: check auth state and boot app ───────────────────────────────────────
-async function initSupabase(){
-  if(!_sb){
-    // Not configured — just run locally
-    loadState(); renderAll(); initTelegram();
-    return;
-  }
-
-  // Listen for auth state changes (fires on login, logout, token refresh)
-  _sb.auth.onAuthStateChange(async (event, session)=>{
-    if(event==='SIGNED_OUT'){
-      _sbUser = null;
-      document.getElementById('auth-screen').style.display = 'block';
-      return;
-    }
-    if(session?.user){
-      _sbUser = session.user;
-      document.getElementById('auth-screen').style.display = 'none';
-
-      // Update user avatar
-      const name = session.user.user_metadata?.full_name || session.user.email.split('@')[0];
-      const initials = name.split(' ').map(w=>w[0]).join('').slice(0,2).toUpperCase();
-      const avatarBtn = document.getElementById('user-avatar-btn');
-      avatarBtn.textContent = initials;
-      avatarBtn.style.display = 'block';
-      document.getElementById('sync-dot').style.display = 'block';
-      document.getElementById('user-menu-name').textContent = name;
-      document.getElementById('user-menu-email').textContent = session.user.email;
-
-      // Only do full sync on SIGNED_IN or initial load, not on every token refresh
-      if(event==='SIGNED_IN' || event==='INITIAL_SESSION'){
-        // Show local data instantly
-        loadState();
-        renderAll();
-        initTelegram();
-        setSyncDot('syncing');
-        document.getElementById('save-status').textContent='☁ Syncing…';
-
-        // Pull from Supabase first
-        await syncFromSupabase();
-
-        // If Supabase had no workouts but we have local data → push everything up
-        // This handles first-time sync for existing users
-        const localHist=state.workoutHistory||[];
-        if(localHist.length>0){
-          try{
-            const {data:existing}=await _sb.from('workouts')
-              .select('id').eq('user_id',_sbUser.id).limit(1);
-            const supabaseEmpty=!existing||existing.length===0;
-            if(supabaseEmpty){
-              // First time — push all local workouts to cloud
-              setSyncDot('syncing');
-              document.getElementById('save-status').textContent='☁ First sync…';
-              const uid=_sbUser.id;
-              // Batch in groups of 50
-              for(let i=0;i<localHist.length;i+=50){
-                const batch=localHist.slice(i,i+50).map(w=>({
-                  id:w.id,user_id:uid,date:w.date,
-                  exercises:w.exercises,
-                  total_volume:w.totalVolume||0,
-                  total_kcal:w.totalKcal||0,
-                  duration:w.duration||0
-                }));
-                await _sb.from('workouts').upsert(batch);
-              }
-              toast('All '+localHist.length+' workouts uploaded to cloud ✓');
-            }
-          }catch(e){console.warn('First-sync upload error:',e);}
-        }
-
-        // Full re-render of everything with fresh cloud data
-        renderAll();
-        renderWorkoutPage();
-        renderWeightPage();
-        updateDataPage();
-        renderCaloriesPage();
-        // Re-render current active page
-        const activePage=document.querySelector('.page.active');
-        if(activePage){
-          const pageName=activePage.id.replace('page-','');
-          if(pageName==='progress') renderProgress();
-          if(pageName==='records') renderRecordsPage();
-          if(pageName==='report') showReport(reportPeriod);
-          if(pageName==='food'){renderFoodPage();}
-          if(pageName==='steps') renderStepsPanel();
-        }
-        setSyncDot('ok');
-        document.getElementById('save-status').textContent='☁ Synced';
-        toast('Welcome back, '+name.split(' ')[0]+'! ☁');
-      }
-    }
-  });
-
-  // Check existing session immediately
-  const {data:{session}} = await _sb.auth.getSession();
-  if(!session){
-    // No session — show auth screen but render app underneath
-    loadState(); renderAll(); initTelegram();
-    document.getElementById('auth-screen').style.display = 'block';
-  }
-  // If session exists, onAuthStateChange fires with INITIAL_SESSION automatically
-}
-
-loadState();renderAll();initTelegram();initSupabase();
-</script>
-</body>
-</html>
+        user_id:uid, date:e.date, weight

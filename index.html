@@ -6456,39 +6456,107 @@ function renderDietPlanManager(){
   const daysLeft=dayNum?plan.days-dayNum+1:0;
   const progress=dayNum?Math.round((dayNum/plan.days)*100):100;
   let html=`<div style="background:var(--surface2);border-radius:12px;padding:14px;margin-bottom:12px">
-    <div style="font-family:var(--font-cond);font-weight:900;font-size:20px">${plan.name}</div>
-    <div style="font-size:12px;color:var(--text3);margin-top:2px">Started ${plan.startDate} · ${plan.days} days total</div>
-    ${dayNum?`<div style="font-size:14px;color:var(--red);font-weight:700;margin-top:6px">Day ${dayNum} of ${plan.days} · ${daysLeft} days left</div>`
-            :`<div style="font-size:13px;color:#22c55e;font-weight:700;margin-top:6px">✓ Plan completed!</div>`}
-    <div style="height:6px;background:var(--border);border-radius:3px;margin-top:8px;overflow:hidden">
-      <div style="height:100%;width:${progress}%;background:var(--red);border-radius:3px"></div>
+    <div style="font-size:10px;font-weight:700;text-transform:uppercase;color:var(--text3);margin-bottom:3px">Plan name</div>
+    <input id="dp-edit-name" value="${plan.name}" style="width:100%;padding:6px 8px;border:1px solid var(--border);border-radius:8px;background:var(--surface);color:var(--text);font-size:14px;font-weight:700;box-sizing:border-box;margin-bottom:8px" oninput="updatePlanField('name',this.value)">
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:10px">
+      <div>
+        <div style="font-size:10px;font-weight:700;text-transform:uppercase;color:var(--text3);margin-bottom:3px">Start date</div>
+        <input type="date" value="${plan.startDate}" style="width:100%;padding:6px 8px;border:1px solid var(--border);border-radius:8px;background:var(--surface);color:var(--text);font-size:12px;box-sizing:border-box" oninput="updatePlanField('startDate',this.value)">
+      </div>
+      <div>
+        <div style="font-size:10px;font-weight:700;text-transform:uppercase;color:var(--text3);margin-bottom:3px">Duration (days)</div>
+        <input type="number" value="${plan.days}" min="1" max="365" style="width:100%;padding:6px 8px;border:1px solid var(--border);border-radius:8px;background:var(--surface);color:var(--text);font-size:12px;box-sizing:border-box" oninput="updatePlanField('days',parseInt(this.value)||14)">
+      </div>
     </div>
+    ${dayNum?`<div style="font-size:13px;color:var(--red);font-weight:700">Day ${dayNum} of ${plan.days} · ${daysLeft} days left</div>
+    <div style="height:5px;background:var(--border);border-radius:3px;margin-top:6px;overflow:hidden">
+      <div style="height:100%;width:${progress}%;background:var(--red);border-radius:3px"></div>
+    </div>`:`<div style="font-size:13px;color:#22c55e;font-weight:700">Plan completed!</div>`}
   </div>
-  <div style="font-weight:700;font-size:12px;color:var(--text3);margin-bottom:8px;text-transform:uppercase;letter-spacing:.5px">Day Rotation</div>`;
-  plan.rotation.forEach(day=>{
+  <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
+    <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--text3)">Day Rotation</div>
+    <button onclick="addPlanDay()" style="background:var(--red);color:#fff;border:none;border-radius:8px;padding:5px 10px;font-size:12px;font-weight:700;cursor:pointer">+ Add Day</button>
+  </div>`;
+  plan.rotation.forEach((day,dayIdx)=>{
+    const meals=['breakfast','lunch','dinner','snack'];
     html+=`<div style="background:var(--surface2);border-radius:10px;padding:10px 12px;margin-bottom:8px">
-      <div style="font-family:var(--font-cond);font-weight:700;font-size:15px;color:var(--red);margin-bottom:6px">DAY ${day.day}${plan.rotation.length===1?' · repeats daily':''}</div>
-      ${['breakfast','lunch','dinner','snack'].filter(m=>(day[m]||[]).length>0).map(m=>`
-        <div style="margin-bottom:3px"><span style="font-size:10px;font-weight:700;text-transform:uppercase;color:var(--text3)">${m}: </span>
-        <span style="font-size:12px;color:var(--text2)">${day[m].join(', ')}</span></div>`).join('')}
-    </div>`;
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
+        <div style="font-family:var(--font-cond);font-weight:700;font-size:15px;color:var(--red)">DAY ${day.day}${plan.rotation.length===1?' · repeats daily':''}</div>
+        <button onclick="deletePlanDay(${dayIdx})" style="background:rgba(226,75,74,.1);border:none;color:var(--red);font-size:12px;font-weight:700;cursor:pointer;padding:3px 8px;border-radius:6px">Delete day</button>
+      </div>`;
+    meals.forEach(meal=>{
+      const items=day[meal]||[];
+      html+=`<div style="margin-bottom:8px">
+        <div style="font-size:10px;font-weight:700;text-transform:uppercase;color:var(--text3);margin-bottom:4px">${meal}</div>
+        ${items.map((item,itemIdx)=>`<div style="display:flex;align-items:center;gap:6px;margin-bottom:4px">
+          <input value="${item.replace(/"/g,'&quot;')}" style="flex:1;min-width:0;padding:5px 8px;border:1px solid var(--border);border-radius:7px;background:var(--surface);color:var(--text);font-size:12px" onchange="updatePlanItem(${dayIdx},'${meal}',${itemIdx},this.value)">
+          <button onclick="deletePlanItem(${dayIdx},'${meal}',${itemIdx})" style="background:none;border:none;color:var(--text3);font-size:18px;cursor:pointer;padding:0 4px;flex-shrink:0;line-height:1">&times;</button>
+        </div>`).join('')}
+        <button onclick="addPlanItem(${dayIdx},'${meal}')" style="background:none;border:1px dashed var(--border);border-radius:7px;padding:4px 10px;font-size:11px;color:var(--text3);cursor:pointer;width:100%;margin-top:2px">+ add item</button>
+      </div>`;
+    });
+    html+=`</div>`;
   });
   html+=`<div style="display:flex;gap:8px;margin-top:12px">
     <button onclick="logTodaysPlan();closeDietPlanManager()" class="btn-primary" style="flex:2;font-size:14px;padding:11px">Log Today</button>
-    <button onclick="endDietPlan()" style="flex:1;background:var(--surface2);border:1px solid var(--border);border-radius:10px;padding:11px;font-size:13px;color:var(--red);font-weight:700;cursor:pointer">End Plan</button>
+    <button onclick="endDietPlan()" style="flex:1;background:var(--surface2);border:1px solid var(--border);border-radius:10px;padding:11px;font-size:13px;color:var(--red);font-weight:700;cursor:pointer">Delete Plan</button>
   </div>
   <button onclick="closeDietPlanManager();openDietPlanImport()" style="width:100%;margin-top:8px;background:none;border:1px solid var(--border);border-radius:10px;padding:10px;font-size:13px;color:var(--text2);font-weight:600;cursor:pointer">+ Import New Plan</button>`;
   div.innerHTML=html;
 }
 
+function updatePlanField(field,value){
+  if(!state.activeDietPlan) return;
+  state.activeDietPlan[field]=value;
+  saveState({profile:true});
+  renderDietPlanBanner();
+}
+function updatePlanItem(dayIdx,meal,itemIdx,value){
+  if(!state.activeDietPlan) return;
+  state.activeDietPlan.rotation[dayIdx][meal][itemIdx]=value;
+  saveState({profile:true});
+}
+function deletePlanItem(dayIdx,meal,itemIdx){
+  if(!state.activeDietPlan) return;
+  state.activeDietPlan.rotation[dayIdx][meal].splice(itemIdx,1);
+  saveState({profile:true});
+  renderDietPlanManager();
+}
+function addPlanItem(dayIdx,meal){
+  if(!state.activeDietPlan) return;
+  const item=prompt('Add food item (e.g. "2 idli" or "rice 200g"):','');
+  if(!item||!item.trim()) return;
+  if(!state.activeDietPlan.rotation[dayIdx][meal]) state.activeDietPlan.rotation[dayIdx][meal]=[];
+  state.activeDietPlan.rotation[dayIdx][meal].push(item.trim());
+  saveState({profile:true});
+  renderDietPlanManager();
+}
+function deletePlanDay(dayIdx){
+  if(!state.activeDietPlan) return;
+  if(state.activeDietPlan.rotation.length<=1){toast('Cannot delete the only day');return;}
+  if(!confirm('Delete Day '+(dayIdx+1)+'?')) return;
+  state.activeDietPlan.rotation.splice(dayIdx,1);
+  state.activeDietPlan.rotation.forEach((d,i)=>d.day=i+1);
+  saveState({profile:true});
+  renderDietPlanManager();
+}
+function addPlanDay(){
+  if(!state.activeDietPlan) return;
+  const n=state.activeDietPlan.rotation.length+1;
+  state.activeDietPlan.rotation.push({day:n,breakfast:[],lunch:[],dinner:[],snack:[]});
+  saveState({profile:true});
+  renderDietPlanManager();
+  toast('Day '+n+' added');
+}
+
 function endDietPlan(){
-  if(!confirm('End this diet plan?')) return;
+  if(!confirm('Delete this diet plan?')) return;
   if(state.activeDietPlan) state.activeDietPlan.active=false;
   saveState({profile:true});
   closeDietPlanManager();
   renderDietPlanBanner();
   renderFoodPage();
-  toast('Diet plan ended');
+  toast('Diet plan deleted');
 }
 
 // ─── FOOD TAB SWITCHER ────────────────────────────────────────────────────────

@@ -2812,6 +2812,8 @@ const EXERCISE_DB = {
     {name:'Machine Shoulder Press',met:6.5,equip:'Machine',head:'Front + Side Delt',session:'A',tip:'Adjust seat so handles are at shoulder height.'},
     {name:'Shrugs',met:5.5,equip:'Barbell',head:'Traps',session:'A',tip:'Full ROM. Pause at top for 1 second.'},
     {name:'Landmine Lateral Raise',met:4.0,equip:'Barbell',head:'Side Delt',session:'B',tip:'One end of barbell. Arc motion = constant tension on side delt.'},
+    {name:'Reverse Cable Crossover',met:4.0,equip:'Cable',head:'Rear Delt',session:'B',tip:'Cables crossed at chest height. Pull apart and back. Dr Milo Wolf rates this the only exercise with full rear delt stretch.'},
+    {name:'Powell Raise',met:3.5,equip:'Dumbbell',head:'Rear Delt + Rotator Cuff',session:'B',tip:'Lie on side on incline bench. Raise top arm up and back. Rare but highly effective rear delt isolator.'},
   ],
   'Biceps': [
     // Session A — Long head (peak) + Brachialis
@@ -2830,6 +2832,8 @@ const EXERCISE_DB = {
     {name:'Barbell Curl',met:4.5,equip:'Barbell',head:'Both Heads',session:'A',tip:'Full ROM. Pause at top. No swinging.'},
     {name:'Dumbbell Curl',met:4.5,equip:'Dumbbell',head:'Both Heads',session:'A',tip:'Supinate wrist as you curl. Full ROM.'},
     {name:'Cable Hammer Curl',met:4.5,equip:'Cable',head:'Brachialis',session:'B',tip:'Rope attachment. Neutral grip throughout.'},
+    {name:'Bayesian Curl',met:4.5,equip:'Cable',head:'Long Head Stretch',session:'B',tip:'Cable behind you at hip height. Curl forward. Maximum long head stretch at bottom. Science-backed for hypertrophy.'},
+    {name:'Incline Hammer Curl',met:4.5,equip:'Dumbbell',head:'Brachialis + Long Head',session:'A',tip:'Incline bench, neutral grip. Arms hang behind body for maximum stretch on both heads.'},
   ],
   'Triceps': [
     // Session A — Long head (biggest head, ~50% of tricep)
@@ -2847,6 +2851,8 @@ const EXERCISE_DB = {
     {name:'Rope Pushdown',met:4.5,equip:'Cable',head:'Lateral Head',session:'A',tip:'Split rope at bottom for better contraction.'},
     {name:'Kickback',met:4.0,equip:'Dumbbell',head:'Lateral Head',session:'B',tip:'Upper arm parallel to floor. Slow eccentric.'},
     {name:'Tricep Machine Pushdown',met:4.5,equip:'Machine',head:'All Heads',session:'A',tip:'Constant tension. Adjust seat so elbows are at handle height.'},
+    {name:'Katana Extension',met:4.5,equip:'Cable',head:'Long Head (S-tier)',session:'B',tip:'Facing cable, grab handles, spin 180 degrees. Arms overhead. Jeff Nippard rates this S-tier. Incredible long head stretch.'},
+    {name:'Cross-Cable Tricep Extension',met:4.5,equip:'Cable',head:'All Heads',session:'B',tip:'Two cable stations, arms crossed overhead. Unparalleled constant tension throughout full ROM.'},
   ],
   'Legs': [
     // Session A — Quad dominant
@@ -2855,6 +2861,8 @@ const EXERCISE_DB = {
     {name:'Leg Extension',met:5.0,equip:'Machine',head:'Quads (Isolation)',session:'A',tip:'Pause at top. Control the lowering phase.'},
     {name:'Hack Squat',met:8.0,equip:'Machine',head:'Quads (VMO)',session:'A',tip:'Narrow foot placement hits VMO (teardrop muscle).'},
     {name:'Goblet Squat',met:8.0,equip:'Dumbbell',head:'Quads + Core',session:'A',tip:'Dumbbell at chest. Elbows push knees out.'},
+    {name:'Zercher Squat',met:9.0,equip:'Barbell',head:'Quads + Core + Glutes',session:'A',tip:'Bar in crook of elbows. Extremely hard on core. Builds raw leg and core strength.'},
+    {name:'Paused Squat',met:9.0,equip:'Barbell',head:'Quads (Strength)',session:'A',tip:'3-second pause at bottom. Eliminates stretch reflex. Brutal quad builder.'},
     {name:'Cyclist Squat',met:7.5,equip:'Barbell',head:'Quads (VMO)',session:'A',tip:'Heels elevated, upright torso. Isolates quads like leg extension but compound.'},
     // Session B — Posterior chain / Hip dominant
     {name:'Romanian Deadlift',met:8.0,equip:'Barbell',head:'Hamstrings + Glutes',session:'B',tip:'Push hips back. Bar close to legs. Feel the stretch.'},
@@ -2932,6 +2940,9 @@ const EXERCISE_DB = {
     {name:'Box Jump',met:9.0,equip:'Bodyweight',head:'Explosive Power',session:'B',tip:'Soft landing. Step down — never jump down.'},
     {name:'Assault Bike',met:12.0,equip:'Machine',head:'Full Body HIIT',session:'A',tip:'The devil tricycle. 20s all-out, 40s rest x 10.'},
     {name:'Sled Push',met:11.0,equip:'Equipment',head:'Legs + Conditioning',session:'B',tip:'Low angle, drive with legs. No momentum.'},
+    {name:'Farmer Walk',met:8.5,equip:'Dumbbell',head:'Full Body + Grip',session:'A',tip:'Heavy dumbbells or trap bar. Walk as far as possible. Builds crushing grip and full body strength.'},
+    {name:'Yoke Walk',met:10.0,equip:'Equipment',head:'Full Body + Core',session:'B',tip:'Bar across shoulders, walk. Most demanding exercise for spinal stability per Stuart McGill research.'},
+    {name:'Zercher Carry',met:9.0,equip:'Barbell',head:'Core + Quads',session:'B',tip:'Bar in crook of elbows, walk forward. Brutal core challenge.'},
   ],
   'Forearms': [
     {name:'Wrist Curl',met:3.0,equip:'Barbell',head:'Flexors',session:'A',tip:'Forearm on bench. Full ROM wrist flexion.'},
@@ -2983,46 +2994,100 @@ const SPLIT_DAYS = {
 function getGuidedSplitRecommendation() {
   const history = state.workoutHistory || [];
   const today = todayStr();
+  const todayDate = new Date(today);
 
-  // What was trained in the last 2 sessions?
-  const recentMuscles = new Set();
-  const lastSessionMuscles = new Set();
-  history.slice(-2).forEach((w, idx) => {
-    w.exercises.forEach(e => {
-      recentMuscles.add(e.muscle);
-      if(idx === history.length - 2 || history.length <= 2) lastSessionMuscles.add(e.muscle);
-    });
+  // ── Week boundaries (Monday to Sunday) ─────────────────────────────────────
+  const dow = (todayDate.getDay() + 6) % 7; // 0=Mon, 1=Tue... 6=Sun
+  const weekStart = new Date(todayDate);
+  weekStart.setDate(todayDate.getDate() - dow);
+  const weekStartStr = weekStart.toISOString().slice(0,10);
+
+  // ── What splits have been done THIS week already? ───────────────────────────
+  const thisWeekWorkouts = history.filter(w => w.date >= weekStartStr);
+  const splitsThisWeek = new Set();
+  const musclesThisWeek = new Set();
+
+  thisWeekWorkouts.forEach(w => {
+    w.exercises.forEach(e => musclesThisWeek.add(e.muscle));
+    // Match to a split
+    for(const [split, muscles] of Object.entries(SPLIT_DAYS)){
+      const overlap = muscles.filter(m => w.exercises.some(e => e.muscle === m)).length;
+      if(overlap >= 2) splitsThisWeek.add(split);
+    }
   });
 
-  // Find last split type trained
+  // ── Last workout (for sequential PPL rotation) ──────────────────────────────
   let lastSplit = null;
+  let lastWorkoutDate = null;
   if(history.length > 0) {
     const lastW = history[history.length - 1];
+    lastWorkoutDate = lastW.date;
     const lastMs = new Set(lastW.exercises.map(e => e.muscle));
-    for(const [split, muscles] of Object.entries(SPLIT_DAYS)) {
+    for(const [split, muscles] of Object.entries(SPLIT_DAYS)){
       const overlap = muscles.filter(m => lastMs.has(m)).length;
-      if(overlap >= 2) { lastSplit = split; break; }
+      if(overlap >= 2){ lastSplit = split; break; }
     }
   }
 
-  // Determine next split based on PPL rotation
-  const pplOrder = ['Push', 'Pull', 'Legs'];
-  const fullOrder = ['Push', 'Pull', 'Legs', 'Upper', 'Lower'];
-  let recommended = 'Push';
-  if(lastSplit === 'Push') recommended = 'Pull';
-  else if(lastSplit === 'Pull') recommended = 'Legs';
-  else if(lastSplit === 'Legs') recommended = 'Push';
-  else if(lastSplit === 'Upper') recommended = 'Lower';
-  else if(lastSplit === 'Lower') recommended = 'Upper';
+  // ── Days since last workout ─────────────────────────────────────────────────
+  const daysSinceLastWorkout = lastWorkoutDate
+    ? Math.floor((todayDate - new Date(lastWorkoutDate)) / 86400000)
+    : 999;
 
-  // Check for overdue muscles (not trained in 5+ days)
+  // ── PPL cycle order ─────────────────────────────────────────────────────────
+  const pplCycle = ['Push','Pull','Legs'];
+
+  // Find next in PPL cycle that hasn't been done this week yet
+  let recommended = 'Push';
+
+  if(lastSplit){
+    // Get next in PPL rotation
+    const lastIdx = pplCycle.indexOf(lastSplit);
+    if(lastIdx >= 0){
+      // Try next, then next+1, then wrap around
+      for(let i = 1; i <= pplCycle.length; i++){
+        const candidate = pplCycle[(lastIdx + i) % pplCycle.length];
+        if(!splitsThisWeek.has(candidate)){
+          recommended = candidate;
+          break;
+        }
+      }
+      // If all 3 done this week, start fresh next cycle
+      if(pplCycle.every(s => splitsThisWeek.has(s))){
+        recommended = pplCycle[(pplCycle.indexOf(lastSplit) + 1) % pplCycle.length];
+      }
+    } else {
+      // Was Upper/Lower — check what's not done this week
+      recommended = !splitsThisWeek.has('Upper') ? 'Upper' :
+                    !splitsThisWeek.has('Lower') ? 'Lower' : 'Push';
+    }
+  } else {
+    // No history at all — recommend Push to start
+    recommended = 'Push';
+  }
+
+  // ── Rest day logic — if worked out yesterday, suggest rest ─────────────────
+  const suggestRest = daysSinceLastWorkout === 0; // trained today already
+
+  // ── Overdue muscles (not hit in 5+ days) ───────────────────────────────────
   const overdueMuscles = [];
-  const majorMuscles = ['Chest', 'Back', 'Shoulders', 'Biceps', 'Triceps', 'Legs'];
+  const majorMuscles = ['Chest','Back','Shoulders','Biceps','Triceps','Legs'];
   majorMuscles.forEach(m => {
     if(getDaysSinceLastTrained(m) >= 5) overdueMuscles.push(m);
   });
 
-  return { recommended, lastSplit, overdueMuscles };
+  // ── Week summary ────────────────────────────────────────────────────────────
+  const daysTrainedThisWeek = [...new Set(thisWeekWorkouts.map(w=>w.date))].length;
+
+  return {
+    recommended,
+    lastSplit,
+    splitsThisWeek: [...splitsThisWeek],
+    overdueMuscles,
+    suggestRest,
+    daysTrainedThisWeek,
+    weekStartStr
+  };
 }
 const MUSCLE_EMOJIS={Chest:'🏋️',Back:'💪',Shoulders:'🔝',Biceps:'💪',Triceps:'🔩',Legs:'🦵',Glutes:'🍑',Hamstrings:'🦵',Calves:'🦶',Abs:'⚡',Cardio:'🏃',Forearms:'✊'};
 let libSelectedMuscle='All', libSearchQuery='';
@@ -3563,6 +3628,98 @@ function calcLibKcal(met, bw){
   return Math.round(met * bw * setDurHrs * 3);
 }
 
+// ── Exercise library helper functions ────────────────────────────────────────
+
+function toggleLibExpand(id){
+  const el=document.getElementById(id);
+  const arrow=document.getElementById(id+'-arrow');
+  if(!el) return;
+  const open=el.style.display==='block';
+  el.style.display=open?'none':'block';
+  if(arrow) arrow.textContent=open?'▼':'▲';
+}
+
+function getSecondaryMuscles(name, primaryMuscle){
+  const n=name.toLowerCase();
+  const map={
+    'bench press':'Triceps, Front Delts, Serratus','incline':'Triceps, Front Delts',
+    'decline':'Triceps, Lower Chest','fly':'Front Delts','dip':'Triceps, Lower Chest',
+    'squat':'Hamstrings, Glutes, Core, Calves','deadlift':'Glutes, Hamstrings, Core, Traps, Forearms',
+    'romanian':'Glutes, Core, Calves','row':'Biceps, Rear Delts, Core',
+    'pull-up':'Biceps, Rear Delts, Core','chin-up':'Biceps, Core','lat pulldown':'Biceps, Rear Delts',
+    'overhead press':'Triceps, Traps, Core','arnold':'Front Delts, Traps',
+    'lateral raise':'Upper Traps','curl':'Brachialis, Forearms','hammer':'Brachialis, Brachioradialis',
+    'pushdown':'Lateral Head, Medial Head','skull':'Long Head, Medial Head',
+    'lunge':'Glutes, Hamstrings, Calves, Core','bulgarian':'Glutes, Hamstrings, Core',
+    'hip thrust':'Hamstrings, Lower Back','plank':'Glutes, Shoulders, Hip Flexors',
+    'crunch':'Hip Flexors','leg raise':'Hip Flexors','face pull':'Rotator Cuff, Mid Traps',
+  };
+  for(const [key,val] of Object.entries(map)){
+    if(n.includes(key)) return val;
+  }
+  const generic={'Chest':'Triceps, Front Delts','Back':'Biceps, Rear Delts','Shoulders':'Traps, Triceps',
+    'Biceps':'Brachialis, Forearms','Triceps':'Chest, Shoulders','Legs':'Glutes, Core',
+    'Glutes':'Hamstrings, Lower Back','Hamstrings':'Glutes, Calves','Abs':'Hip Flexors, Obliques',
+    'Calves':'Achilles, Tibialis','Forearms':'Grip, Biceps'};
+  return generic[primaryMuscle]||'';
+}
+
+function getHowTo(name, muscle, tip){
+  const n=name.toLowerCase();
+  const steps={
+    'barbell bench press':'1. Lie on bench, feet flat. 2. Grip slightly wider than shoulders. 3. Lower bar to lower chest. 4. Press up explosively.',
+    'barbell squat':'1. Bar on upper traps. 2. Feet shoulder-width, toes out. 3. Break hips and knees together. 4. Below parallel. 5. Drive through heels.',
+    'romanian deadlift':'1. Hinge at hips, soft knee. 2. Bar down shins. 3. Feel hamstring stretch. 4. Drive hips forward. 5. Squeeze glutes at top.',
+    'pull-up':'1. Dead hang, shoulder-width. 2. Depress shoulders. 3. Pull elbows to hips. 4. Chin over bar. 5. Lower fully.',
+    'barbell row':'1. Hinge torso near parallel. 2. Pull to lower chest. 3. Lead with elbows. 4. Pause at top. 5. Lower controlled.',
+    'overhead press':'1. Bar at collarbone. 2. Press straight up. 3. Head shifts back slightly. 4. Lock out overhead.',
+    'lateral raise':'1. Slight forward lean. 2. Raise to shoulder height. 3. Lead with elbows. 4. Pause briefly. 5. Lower slowly 3 sec.',
+    'barbell curl':'1. Full hang at bottom. 2. Curl keeping elbows pinned. 3. Squeeze at top. 4. Control the negative.',
+    'hammer curl':'1. Neutral grip thumbs up. 2. Curl without rotating wrist. 3. Squeeze brachialis at top. 4. Lower fully.',
+    'tricep pushdown':'1. Elbows pinned to sides. 2. Push to full extension. 3. Pause at bottom. 4. Slow return to 90 degrees.',
+    'skull crusher':'1. Lie on bench, bar above forehead. 2. Lower by bending elbows only. 3. Press back up.',
+    'hip thrust':'1. Shoulders on bench, bar on hips. 2. Chin tucked. 3. Drive hips up. 4. Squeeze glutes 2 seconds. 5. Lower until hips near floor.',
+    'plank':'1. Forearms on floor. 2. Body in straight line. 3. Brace core. 4. Squeeze glutes. 5. Breathe normally.',
+    'face pull':'1. Cable at forehead height. 2. Pull rope toward face. 3. Thumbs behind, elbows high. 4. Pause at full retraction.',
+  };
+  for(const [key,val] of Object.entries(steps)){
+    if(n.includes(key.split(' ')[0]) && n.includes(key.split(' ').pop())) return val;
+    if(n===key) return val;
+  }
+  return tip||'Focus on controlled movement through full range of motion.';
+}
+
+function getMuscleAnatSvg(head, muscle){
+  const R='#E24B4A', G='#9ca3af', S='#6b7280';
+  const regions={
+    'Chest':     [{x:22,y:22,w:24,h:18,rx:4}],
+    'Back':      [{x:20,y:18,w:28,h:22,rx:4}],
+    'Shoulders': [{x:13,y:16,w:10,h:10,rx:5},{x:45,y:16,w:10,h:10,rx:5}],
+    'Biceps':    [{x:10,y:27,w:8,h:15,rx:4},{x:50,y:27,w:8,h:15,rx:4}],
+    'Triceps':   [{x:10,y:27,w:8,h:15,rx:4},{x:50,y:27,w:8,h:15,rx:4}],
+    'Legs':      [{x:21,y:51,w:12,h:20,rx:4},{x:35,y:51,w:12,h:20,rx:4}],
+    'Glutes':    [{x:21,y:47,w:12,h:14,rx:4},{x:35,y:47,w:12,h:14,rx:4}],
+    'Hamstrings':[{x:21,y:53,w:12,h:16,rx:4},{x:35,y:53,w:12,h:16,rx:4}],
+    'Calves':    [{x:23,y:71,w:9,h:11,rx:4},{x:36,y:71,w:9,h:11,rx:4}],
+    'Abs':       [{x:24,y:40,w:20,h:18,rx:4}],
+    'Cardio':    [{x:16,y:16,w:36,h:50,rx:6}],
+    'Forearms':  [{x:8,y:42,w:8,h:12,rx:4},{x:52,y:42,w:8,h:12,rx:4}],
+  };
+  const rects=(regions[muscle]||[{x:24,y:30,w:20,h:20,rx:4}]);
+  const highlights=rects.map(r=>`<rect x="${r.x}" y="${r.y}" width="${r.w}" height="${r.h}" rx="${r.rx||4}" fill="${R}" opacity="0.9"/>`).join('');
+  return `<svg width="68" height="80" viewBox="0 0 68 80" xmlns="http://www.w3.org/2000/svg">
+    <circle cx="34" cy="10" r="7" fill="${S}" opacity="0.5"/>
+    <rect x="31" y="16" width="6" height="5" rx="2" fill="${S}" opacity="0.4"/>
+    <rect x="22" y="20" width="24" height="30" rx="5" fill="${G}" opacity="0.3"/>
+    <rect x="11" y="22" width="8" height="26" rx="4" fill="${G}" opacity="0.3"/>
+    <rect x="49" y="22" width="8" height="26" rx="4" fill="${G}" opacity="0.3"/>
+    <rect x="22" y="50" width="11" height="26" rx="4" fill="${G}" opacity="0.3"/>
+    <rect x="35" y="50" width="11" height="26" rx="4" fill="${G}" opacity="0.3"/>
+    ${highlights}
+  </svg>`;
+}
+
+
 function renderLibraryList(){
   const list=document.getElementById('lib-list');
   list.innerHTML='';
@@ -3588,25 +3745,69 @@ function renderLibraryList(){
       const kcal=calcLibKcal(ex.met,bw);
       const item=document.createElement('div');
       item.className='lib-item';
+      item.style.cssText='flex-direction:column;align-items:stretch;padding:0;overflow:hidden;border-radius:12px';
       const alreadyAdded=state.exercises.some(e=>e.name.toUpperCase()===ex.name.toUpperCase());
-
-      // Get the animated SVG illustration
-      const svgMarkup=getExSvg(ex.name, muscle);
 
       const lastSess=getLastSession(ex.name);
       const lastSetsStr=lastSess?lastSess.sets.slice(0,2).map(s=>s.w+'×'+s.r).join(', ')+(lastSess.sets.length>2?'…':''):'';
-      const lastLine=lastSess?`<div style="font-size:10px;color:var(--text3);margin-top:2px">Last ${lastSess.date.slice(5)}: ${lastSetsStr}</div>`:`<div style="font-size:10px;color:var(--text3);margin-top:2px">No history yet</div>`;
+      const lastLine=lastSess
+        ?`<span style="color:var(--text3);font-size:11px">Last ${lastSess.date.slice(5)}: ${lastSetsStr}</span>`
+        :`<span style="color:var(--text3);font-size:11px">No history yet</span>`;
+
+      // Muscle anatomy SVG
+      const anatSvg = getMuscleAnatSvg(ex.head||'', muscle);
+      const customBadge = ex._custom?'<span style="font-size:9px;background:var(--red);color:#fff;padding:2px 5px;border-radius:4px;font-weight:700;margin-left:5px">MINE</span>':'';
+      const commBadge = ex._community?`<span style="font-size:9px;background:rgba(99,102,241,.15);color:#6366f1;padding:2px 5px;border-radius:4px;font-weight:700;margin-left:5px">🌍 ${ex._contributor||''}</span>`:'';
+      const sessBadge = ex.session?`<span style="font-size:9px;background:var(--surface2);color:var(--text3);padding:2px 5px;border-radius:4px;font-weight:600;margin-left:5px">Session ${ex.session}</span>`:'';
+
+      const exId = 'lib-ex-'+ex.name.replace(/[^a-z0-9]/gi,'_');
+
       item.innerHTML=`
-        <div class="lib-svg-icon">${svgMarkup}</div>
-        <div class="lib-info">
-          <div class="lib-name">${ex.name}${ex._custom?'<span style="font-size:9px;background:var(--red);color:#fff;padding:2px 5px;border-radius:4px;font-weight:700;margin-left:5px;vertical-align:middle">MINE</span>':''}</div>
-          <div class="lib-muscle-tag">${muscle} &middot; ${ex.equip}</div>
-          <div class="lib-kcal">🔥 ~${kcal} kcal / 3 sets</div>
-          ${lastLine}
+        <!-- Top row: anatomy + info + add -->
+        <div style="display:flex;align-items:flex-start;gap:10px;padding:12px 12px 8px">
+          <!-- Anatomy figure -->
+          <div style="width:68px;height:80px;flex-shrink:0;border-radius:10px;background:var(--surface2);overflow:hidden;display:flex;align-items:center;justify-content:center">
+            ${anatSvg}
+          </div>
+          <!-- Info -->
+          <div style="flex:1;min-width:0">
+            <div style="font-family:var(--font-cond);font-weight:700;font-size:15px;text-transform:uppercase;color:var(--text);line-height:1.2">${ex.name}${customBadge}${commBadge}</div>
+            <div style="font-size:11px;color:var(--text3);margin-top:3px">${muscle}${ex.equip?' · '+ex.equip:''}${sessBadge}</div>
+            ${ex.head?`<div style="font-size:11px;color:#6366f1;font-weight:600;margin-top:2px">${ex.head}</div>`:''}
+            <div style="display:flex;align-items:center;gap:8px;margin-top:4px">
+              <span style="font-size:12px;font-weight:700;color:var(--red)">🔥 ~${kcal} kcal/3 sets</span>
+              ${lastLine}
+            </div>
+          </div>
+          <!-- Add button -->
+          <button class="lib-add-btn" onclick="addFromLibrary('${ex.name.replace(/'/g,"\\'")}','${muscle}',${ex.met})"
+            style="${alreadyAdded?'background:#22c55e;border-color:#22c55e':''};flex-shrink:0;margin-top:2px">
+            ${alreadyAdded?'✓':'+'}
+          </button>
         </div>
-        <button class="lib-add-btn" title="Add to workout"
-          onclick="addFromLibrary('${ex.name.replace(/'/g,"\\'")}','${muscle}',${ex.met})"
-          style="${alreadyAdded?'background:var(--green)':''}">${alreadyAdded?'✓':'+'}</button>
+
+        <!-- Expand button -->
+        <button onclick="toggleLibExpand('${exId}')" style="width:100%;background:none;border:none;border-top:1px solid var(--border);padding:6px 12px;font-size:11px;color:var(--text3);cursor:pointer;text-align:left;display:flex;justify-content:space-between;align-items:center">
+          <span>How to do it · Primary & secondary muscles</span>
+          <span id="${exId}-arrow">▼</span>
+        </button>
+
+        <!-- Expandable detail panel -->
+        <div id="${exId}" style="display:none;padding:10px 12px 12px;background:var(--surface2);border-top:1px solid var(--border)">
+          ${ex.head?`<div style="margin-bottom:8px">
+            <div style="font-size:10px;font-weight:700;text-transform:uppercase;color:var(--text3);margin-bottom:3px">Muscles targeted</div>
+            <div style="font-size:12px;color:var(--text2)"><span style="color:var(--red);font-weight:700">Primary:</span> ${muscle}${ex.head?' ('+ex.head+')':''}</div>
+            ${getSecondaryMuscles(ex.name,muscle)?`<div style="font-size:12px;color:var(--text2);margin-top:2px"><span style="font-weight:700;color:var(--text3)">Secondary:</span> ${getSecondaryMuscles(ex.name,muscle)}</div>`:''}
+          </div>`:''}
+          ${ex.tip?`<div style="margin-bottom:8px">
+            <div style="font-size:10px;font-weight:700;text-transform:uppercase;color:var(--text3);margin-bottom:3px">How to do it</div>
+            <div style="font-size:12px;color:var(--text2);line-height:1.5">${getHowTo(ex.name,muscle,ex.tip)}</div>
+          </div>`:''}
+          ${ex.tip?`<div style="background:rgba(226,75,74,.08);border-left:3px solid var(--red);padding:6px 10px;border-radius:0 8px 8px 0">
+            <div style="font-size:10px;font-weight:700;text-transform:uppercase;color:var(--red);margin-bottom:2px">Key cue</div>
+            <div style="font-size:12px;color:var(--text2)">${ex.tip}</div>
+          </div>`:''}
+        </div>
       `;
       list.appendChild(item);
       totalShown++;
@@ -6002,13 +6203,21 @@ function openSmartSuggest(){
   if(recDiv){
     const muscles = SPLIT_DAYS[rec.recommended]||[];
     const overdueStr = rec.overdueMuscles.length
-      ? `<div style="margin-top:6px;font-size:11px;color:#f97316">⚠ Overdue: ${rec.overdueMuscles.join(', ')}</div>`:'';
+      ? `<div style="margin-top:5px;font-size:11px;color:#f97316">⚠ Overdue: ${rec.overdueMuscles.join(', ')}</div>`:'';
+    // Show what's been done this week
+    const thisWeekStr = rec.splitsThisWeek.length
+      ? `<div style="margin-top:4px;font-size:11px;color:var(--text3)">This week: ${rec.splitsThisWeek.map(s=>'✓ '+s).join(' · ')}</div>`
+      : `<div style="margin-top:4px;font-size:11px;color:var(--text3)">Nothing trained yet this week</div>`;
+    const restStr = rec.suggestRest
+      ? `<div style="margin-top:5px;font-size:11px;color:#22c55e">💤 You already trained today — rest is also progress</div>`:'';
     recDiv.innerHTML=`
       <div style="font-size:11px;color:var(--text3);margin-bottom:3px">Recommended today:</div>
       <div style="font-family:var(--font-cond);font-weight:900;font-size:22px;color:var(--red)">${rec.recommended.toUpperCase()} DAY</div>
       <div style="font-size:12px;color:var(--text2);margin-top:2px">${muscles.join(' · ')}</div>
-      ${rec.lastSplit?`<div style="font-size:11px;color:var(--text3);margin-top:3px">Last: ${rec.lastSplit} day</div>`:''}
+      ${rec.lastSplit?`<div style="font-size:11px;color:var(--text3);margin-top:3px">Last session: ${rec.lastSplit}</div>`:''}
+      ${thisWeekStr}
       ${overdueStr}
+      ${restStr}
       <button onclick="selectGuidedSplit('${rec.recommended}')" class="btn-primary" style="width:100%;margin-top:10px;font-size:14px;padding:10px">
         ✓ Train ${rec.recommended} Day
       </button>`;
@@ -6062,28 +6271,56 @@ function renderWeeklyCoverage(){
     const container = document.getElementById('ex-container');
     if(container) container.parentNode.insertBefore(el, container);
   }
+  // Monday-based week start
+  const today = new Date();
+  const dow = (today.getDay() + 6) % 7; // 0=Mon...6=Sun
+  const weekStart = new Date(today);
+  weekStart.setDate(today.getDate() - dow);
+  const weekStartStr = weekStart.toISOString().slice(0,10);
+
   const majorMuscles = ['Chest','Back','Shoulders','Biceps','Triceps','Legs','Glutes','Abs'];
-  const weekAgo = new Date(); weekAgo.setDate(weekAgo.getDate()-7);
-  const weekAgoStr = weekAgo.toISOString().slice(0,10);
   const trainedThisWeek = {};
-  (state.workoutHistory||[]).filter(w=>w.date>=weekAgoStr).forEach(w=>{
+  (state.workoutHistory||[]).filter(w=>w.date>=weekStartStr).forEach(w=>{
     w.exercises.forEach(e=>{
       if(!trainedThisWeek[e.muscle]) trainedThisWeek[e.muscle]=0;
       trainedThisWeek[e.muscle]++;
     });
   });
+
+  // Days of week labels (Mon–Sun)
+  const dayLabels=['Mon','Tue','Wed','Thu','Fri','Sat','Sun'];
+  const trainedDays = new Set(
+    (state.workoutHistory||[]).filter(w=>w.date>=weekStartStr).map(w=>w.date)
+  );
+  const dayDots = dayLabels.map((label,i)=>{
+    const d = new Date(weekStart);
+    d.setDate(weekStart.getDate()+i);
+    const ds = d.toISOString().slice(0,10);
+    const isToday = ds===todayStr();
+    const trained = trainedDays.has(ds);
+    return `<div style="text-align:center;flex:1">
+      <div style="width:8px;height:8px;border-radius:50%;margin:0 auto 2px;background:${trained?'var(--red)':isToday?'var(--border)':'transparent'};border:1.5px solid ${trained?'var(--red)':isToday?'var(--text3)':'var(--border)'}"></div>
+      <div style="font-size:9px;color:${isToday?'var(--red)':'var(--text3)'};font-weight:${isToday?'700':'400'}">${label}</div>
+    </div>`;
+  }).join('');
+
   const chips = majorMuscles.map(m=>{
     const count = trainedThisWeek[m]||0;
-    const color = count>=2?'#22c55e':count===1?'#f97316':'var(--border)';
+    const color = count>=2?'#22c55e':count===1?'#f97316':'var(--surface)';
+    const border = count>=2?'#22c55e':count===1?'#f97316':'var(--border)';
     const textColor = count>=2?'#fff':count===1?'#fff':'var(--text3)';
-    return `<span style="display:inline-flex;align-items:center;gap:3px;padding:3px 8px;border-radius:20px;font-size:10px;font-weight:700;background:${color};color:${textColor};border:1px solid ${color}">
+    return `<span style="display:inline-flex;align-items:center;gap:3px;padding:3px 8px;border-radius:20px;font-size:10px;font-weight:700;background:${color};color:${textColor};border:1px solid ${border}">
       ${m} ${count>0?count+'×':'—'}
     </span>`;
   }).join('');
+
   el.innerHTML=`
-    <div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.8px;color:var(--text3);margin-bottom:6px">This Week's Coverage</div>
-    <div style="display:flex;flex-wrap:wrap;gap:4px">${chips}</div>
-    <div style="font-size:10px;color:var(--text3);margin-top:4px">🟢 2+ sessions · 🟠 1 session · ⚪ Not trained</div>`;
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px">
+      <div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.8px;color:var(--text3)">This Week (Mon–Sun)</div>
+      <div style="font-size:10px;color:var(--text3)">${trainedDays.size} day${trainedDays.size!==1?'s':''} trained</div>
+    </div>
+    <div style="display:flex;gap:4px;margin-bottom:10px">${dayDots}</div>
+    <div style="display:flex;flex-wrap:wrap;gap:4px">${chips}</div>`;
 }
 function closeSmartSuggest(){
   document.getElementById('smart-suggest-modal').style.display='none';

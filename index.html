@@ -1919,9 +1919,11 @@ function bindPastSetInputs(ex,i){
     tr.innerHTML=`
       <td class="set-num" style="font-size:11px">Set ${j+1}</td>
       <td><input class="set-inp" type="number" value="${s.w||''}" step="2.5" inputmode="decimal"
-        oninput="pastEditExercises[${i}].sets[${j}].w=parseFloat(this.value)||0;renderPastExercises()"></td>
+        oninput="pastEditExercises[${i}].sets[${j}].w=parseFloat(this.value)||0"
+        onblur="renderPastExercises()"></td>
       <td><input class="set-inp" type="number" value="${s.r||''}" step="1" inputmode="numeric"
-        oninput="pastEditExercises[${i}].sets[${j}].r=parseInt(this.value)||0;renderPastExercises()"></td>
+        oninput="pastEditExercises[${i}].sets[${j}].r=parseInt(this.value)||0"
+        onblur="renderPastExercises()"></td>
       <td><button onclick="deletePastSet(${i},${j})"
         style="width:28px;height:28px;border-radius:6px;border:none;background:var(--red-bg);color:var(--red-dark);font-size:15px;font-weight:700;cursor:pointer">×</button></td>
     `;

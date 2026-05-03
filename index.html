@@ -2032,50 +2032,131 @@ function renderExercises(){
   const ssBar = document.getElementById('smart-suggest-bar');
   if(ssBar) ssBar.style.display = state.exercises.length===0 ? 'block' : 'none';
 
-  // Empty state — show when no exercises added yet today
+  // Empty state
   if(!state.exercises.length){
     c.innerHTML=`
       <div style="text-align:center;padding:32px 20px;color:var(--text3)">
         <div style="font-size:48px;margin-bottom:12px">🏋️</div>
         <div style="font-family:var(--font-cond);font-weight:900;font-size:20px;color:var(--text2);margin-bottom:6px">Start your workout</div>
-        <div style="font-size:13px;line-height:1.5;margin-bottom:20px">Tap <b>+ Exercise</b> to add exercises<br>or use <b>Quick Add</b> to log sets fast</div>
+        <div style="font-size:13px;line-height:1.5;margin-bottom:20px">Tap <b>💪 What am I training today?</b><br>or tap <b>+ Exercise</b> to add manually</div>
       </div>`;
     document.getElementById('wk-sets').textContent='0/0';
     document.getElementById('wk-vol').textContent='0';
     document.getElementById('wk-kcal').textContent='0';
     return;
   }
+
+  // Split exercises into DONE and IN PROGRESS
+  const doneExercises = [];
+  const activeExercises = [];
+  state.exercises.forEach((ex, i) => {
+    const allDone = ex.sets.length > 0 && ex.sets.every(s => s.done);
+    if(allDone) doneExercises.push({ex, i});
+    else activeExercises.push({ex, i});
+  });
+
+  // Group active exercises by muscle
+  const muscleGroups = {};
+  activeExercises.forEach(({ex, i}) => {
+    const m = ex.muscle || 'Other';
+    if(!muscleGroups[m]) muscleGroups[m] = [];
+    muscleGroups[m].push({ex, i});
+  });
   state.exercises.forEach((ex,i)=>{
     const done=ex.sets.filter(s=>s.done).length; td+=done; ts+=ex.sets.length;
     const vol=ex.sets.filter(s=>s.done).reduce((a,s)=>a+s.w*s.r,0); tv+=vol;
-    const best=getBestForEx(ex.name),isPR=ex.sets.some(s=>s.done&&s.w>best);
-    const lastSess=getLastSession(ex.name);
-    const lastSetsStr=lastSess?lastSess.sets.slice(0,3).map(s=>s.w+'×'+s.r).join(', ')+(lastSess.sets.length>3?'…':''):'';
-    const lastLine=lastSess?` <span style="font-size:11px;color:var(--text3)">· Last ${lastSess.date.slice(5)}: ${lastSetsStr}</span>`:`<span style="font-size:11px;color:var(--text3)"> · No history yet</span>`;
-    // show done kcal if any sets done, else show estimated total kcal for all sets
-    const doneKcal=ex.sets.filter(s=>s.done).reduce((a,s)=>a+calcSetCalories(ex.name,s.w,Math.max(1,s.r),bw,ex.met),0);
-    const estKcal=ex.sets.reduce((a,s)=>a+calcSetCalories(ex.name,s.w,Math.max(1,s.r),bw,ex.met),0);
-    const kcalDisplay=done>0 ? `🔥 ${doneKcal} kcal` : `🔥 ~${estKcal} kcal est.`;
-    const ssLabel=ex.superset?`<span class="superset-badge ss-${ex.superset}">SS-${ex.superset}</span>`:'';
-    const div=document.createElement('div'); div.className='ex-card'+(ex.superset?' is-superset':'');
-    div.innerHTML=`
-      <div class="ex-header" onclick="toggleEx(${i})">
-        <div style="flex:1;min-width:0">
-          <div class="ex-name">${ex.name}${isPR?'<span class="pr-badge">NEW PR!</span>':''}${ssLabel}<span class="kcal-badge">${kcalDisplay}</span></div>
-          <div class="ex-meta">${ex.muscle?ex.muscle+' &middot; ':''}${done}/${ex.sets.length} sets${vol?' &middot; '+vol+'kg':''}${lastLine}</div>
-        </div>
-        <div style="display:flex;align-items:center;gap:8px">
-          <button onclick="event.stopPropagation();showPlateCalc(${i})" title="Plate calculator" style="background:none;border:none;font-size:16px;cursor:pointer;padding:2px;opacity:.5">🏋️</button>
-          <button onclick="event.stopPropagation();toggleSuperset(${i})" title="Superset" style="background:none;border:none;font-size:14px;cursor:pointer;padding:2px;opacity:.5">🔗</button>
-          <button onclick="event.stopPropagation();deleteExercise(${i})" title="Remove exercise" style="background:var(--red-bg,rgba(226,75,74,.1));border:none;border-radius:8px;padding:4px 8px;cursor:pointer;display:flex;align-items:center;gap:3px;color:var(--red);font-size:11px;font-weight:700">🗑️ Remove</button>
-          <div class="ex-chevron${state.expanded[i]?' open':''}">&#9662;</div>
-        </div>
-      </div>
-      ${state.expanded[i]?buildSetsHTML(ex,i):''}
-    `;
-    c.appendChild(div);
-    if(state.expanded[i]) bindSetInputs(ex,i);
   });
+
+  // Recalculate from all exercises for accuracy
+  td=0; ts=0; tv=0;
+  state.exercises.forEach(ex=>{
+    td+=ex.sets.filter(s=>s.done).length;
+    ts+=ex.sets.length;
+    tv+=ex.sets.filter(s=>s.done).reduce((a,s)=>a+s.w*s.r,0);
+  });
+
+  // ── DONE section (exercises with all sets completed) ────────────────────
+  if(doneExercises.length > 0){
+    const doneHeader = document.createElement('div');
+    doneHeader.style.cssText='font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.8px;color:#22c55e;padding:4px 2px 6px;display:flex;align-items:center;gap:6px';
+    doneHeader.innerHTML=`<span style="width:8px;height:8px;border-radius:50%;background:#22c55e;display:inline-block"></span> Completed (${doneExercises.length})`;
+    c.appendChild(doneHeader);
+
+    doneExercises.forEach(({ex, i}) => {
+      const vol=ex.sets.reduce((a,s)=>a+s.w*s.r,0);
+      const doneKcal=ex.sets.reduce((a,s)=>a+calcSetCalories(ex.name,s.w,Math.max(1,s.r),bw,ex.met,ex.kcalPerRep||0),0);
+      const div=document.createElement('div');
+      div.className='ex-card';
+      div.style.cssText='border-left:3px solid #22c55e;opacity:0.85';
+      div.innerHTML=`
+        <div class="ex-header" onclick="toggleEx(${i})">
+          <div style="flex:1;min-width:0">
+            <div class="ex-name">✓ ${ex.name}<span class="kcal-badge">🔥 ${doneKcal} kcal</span></div>
+            <div class="ex-meta">${ex.muscle?ex.muscle+' · ':''}${ex.sets.length} sets · ${vol>0?vol+'kg':''}  <span style="color:#22c55e;font-weight:700">All done!</span></div>
+          </div>
+          <div style="display:flex;align-items:center;gap:8px">
+            <button onclick="event.stopPropagation();deleteExercise(${i})" style="background:var(--red-bg,rgba(226,75,74,.1));border:none;border-radius:8px;padding:4px 8px;cursor:pointer;color:var(--red);font-size:11px;font-weight:700">🗑️</button>
+            <div class="ex-chevron${state.expanded[i]?' open':''}">&#9662;</div>
+          </div>
+        </div>
+        ${state.expanded[i]?buildSetsHTML(ex,i):''}
+      `;
+      c.appendChild(div);
+      if(state.expanded[i]) bindSetInputs(ex,i);
+    });
+
+    // Divider
+    if(activeExercises.length > 0){
+      const divider = document.createElement('div');
+      divider.style.cssText='height:1px;background:var(--border);margin:8px 0 12px';
+      c.appendChild(divider);
+    }
+  }
+
+  // ── ACTIVE section — grouped by muscle ──────────────────────────────────
+  for(const [muscle, items] of Object.entries(muscleGroups)){
+    // Muscle group header
+    const header = document.createElement('div');
+    header.style.cssText='font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.8px;color:var(--red);padding:4px 2px 6px;margin-top:4px';
+    header.textContent = muscle;
+    c.appendChild(header);
+
+    items.forEach(({ex, i}) => {
+      const done=ex.sets.filter(s=>s.done).length;
+      const vol=ex.sets.filter(s=>s.done).reduce((a,s)=>a+s.w*s.r,0);
+      const best=getBestForEx(ex.name);
+      const isPR=ex.sets.some(s=>s.done&&s.w>best);
+      const lastSess=getLastSession(ex.name);
+      const lastSetsStr=lastSess?lastSess.sets.slice(0,3).map(s=>s.w+'×'+s.r).join(', ')+(lastSess.sets.length>3?'…':''):'';
+      const lastLine=lastSess?` <span style="font-size:11px;color:var(--text3)">· Last ${lastSess.date.slice(5)}: ${lastSetsStr}</span>`:`<span style="font-size:11px;color:var(--text3)"> · No history yet</span>`;
+      const doneKcal=ex.sets.filter(s=>s.done).reduce((a,s)=>a+calcSetCalories(ex.name,s.w,Math.max(1,s.r),bw,ex.met,ex.kcalPerRep||0),0);
+      const estKcal=ex.sets.reduce((a,s)=>a+calcSetCalories(ex.name,s.w,Math.max(1,s.r),bw,ex.met,ex.kcalPerRep||0),0);
+      const kcalDisplay=done>0?`🔥 ${doneKcal} kcal`:`🔥 ~${estKcal} kcal est.`;
+      const ssLabel=ex.superset?`<span class="superset-badge ss-${ex.superset}">SS-${ex.superset}</span>`:'';
+      const tipLine=ex.tip?`<div style="font-size:10px;color:var(--text3);margin-top:2px;font-style:italic">💡 ${ex.tip}</div>`:'';
+
+      const div=document.createElement('div');
+      div.className='ex-card'+(ex.superset?' is-superset':'');
+      div.innerHTML=`
+        <div class="ex-header" onclick="toggleEx(${i})">
+          <div style="flex:1;min-width:0">
+            <div class="ex-name">${ex.name}${isPR?'<span class="pr-badge">NEW PR!</span>':''}${ssLabel}<span class="kcal-badge">${kcalDisplay}</span></div>
+            <div class="ex-meta">${done}/${ex.sets.length} sets${vol?' · '+vol+'kg':''}${lastLine}</div>
+            ${tipLine}
+          </div>
+          <div style="display:flex;align-items:center;gap:6px">
+            <button onclick="event.stopPropagation();showPlateCalc(${i})" title="Plate calculator" style="background:none;border:none;font-size:16px;cursor:pointer;padding:2px;opacity:.5">🏋️</button>
+            <button onclick="event.stopPropagation();toggleSuperset(${i})" title="Superset" style="background:none;border:none;font-size:14px;cursor:pointer;padding:2px;opacity:.5">🔗</button>
+            <button onclick="event.stopPropagation();deleteExercise(${i})" style="background:var(--red-bg,rgba(226,75,74,.1));border:none;border-radius:8px;padding:4px 8px;cursor:pointer;color:var(--red);font-size:11px;font-weight:700">🗑️</button>
+            <div class="ex-chevron${state.expanded[i]?' open':''}">&#9662;</div>
+          </div>
+        </div>
+        ${state.expanded[i]?buildSetsHTML(ex,i):''}
+      `;
+      c.appendChild(div);
+      if(state.expanded[i]) bindSetInputs(ex,i);
+    });
+  }
   // Stats: show done/total sets, done volume, live kcal (done sets + timer base)
   const totalEstKcal=state.exercises.reduce((a,ex)=>a+ex.sets.reduce((b,s)=>b+calcSetCalories(ex.name,s.w,Math.max(1,s.r),bw,ex.met),0),0);
   const liveKcal=calcLiveCalories();
@@ -2757,205 +2838,175 @@ function renderCaloriesPage(){
 // Comprehensive exercise database bucketed by muscle group
 // GIFs fetched live from ExerciseDB public API; calorie MET per set built-in
 const EXERCISE_DB = {
-  // Each exercise has: name, met, equip, head (which part of muscle), session (A or B), tip
+  // Structure: name, met, equip, head, session, tip, type, difficulty, primary, secondary
   'Chest': [
-    // Session A — Flat/Mid chest focus
-    {name:'Barbell Bench Press',met:8.0,equip:'Barbell',head:'Mid Chest',session:'A',tip:'Keep shoulder blades pinched. Bar to lower chest.'},
-    {name:'Dumbbell Chest Fly',met:5.0,equip:'Dumbbell',head:'Mid Chest',session:'A',tip:'Slight bend in elbows throughout. Squeeze at top.'},
-    {name:'Chest Dip',met:7.0,equip:'Bodyweight',head:'Lower Chest',session:'A',tip:'Lean forward 30° to shift load to chest over triceps.'},
-    {name:'Cable Chest Fly',met:5.0,equip:'Cable',head:'Inner Chest',session:'A',tip:'Constant tension — perfect for finishing sets.'},
-    {name:'Svend Press',met:4.5,equip:'Plates',head:'Inner Chest',session:'A',tip:'Press two plates together and push forward — inner pec contraction like nothing else.'},
-    // Session B — Upper/Unique chest focus
-    {name:'Incline Barbell Press',met:7.5,equip:'Barbell',head:'Upper Chest',session:'B',tip:'30-45° incline. Any higher shifts to shoulders.'},
-    {name:'Incline Dumbbell Press',met:7.0,equip:'Dumbbell',head:'Upper Chest',session:'B',tip:'Dumbbells allow deeper stretch at bottom.'},
-    {name:'Landmine Press',met:6.5,equip:'Barbell',head:'Upper Chest',session:'B',tip:'Unique arc hits upper chest. Safer on shoulders.'},
-    {name:'Decline Bench Press',met:7.0,equip:'Barbell',head:'Lower Chest',session:'B',tip:'Feet secured. Targets lower pec sweep.'},
-    {name:'Pec Deck Machine',met:4.5,equip:'Machine',head:'Inner Chest',session:'B',tip:'Squeeze hard at centre. Control the eccentric.'},
-    // Always available
-    {name:'Push-Up',met:6.0,equip:'Bodyweight',head:'Mid Chest',session:'A',tip:'Hands slightly wider than shoulder width. Full range.'},
-    {name:'Dumbbell Bench Press',met:7.0,equip:'Dumbbell',head:'Mid Chest',session:'A',tip:'Greater ROM than barbell. Touch chest at bottom.'},
-    {name:'Single-Arm DB Press',met:6.5,equip:'Dumbbell',head:'Mid Chest',session:'B',tip:'Forces core stability. Fixes left-right imbalance.'},
-    {name:'Floor Press',met:7.0,equip:'Barbell',head:'Mid Chest',session:'B',tip:'Arms stop when triceps touch floor. Great for lockout strength.'},
+    {name:'Barbell Bench Press',    met:8.0,equip:'Barbell',    head:'Mid Chest',       session:'A',type:'compound',  difficulty:'intermediate',primary:'Chest',     secondary:['Triceps','Front Delts'],        tip:'Bar to lower chest. Shoulder blades pinched.'},
+    {name:'Dumbbell Bench Press',   met:7.0,equip:'Dumbbell',   head:'Mid Chest',       session:'A',type:'compound',  difficulty:'beginner',    primary:'Chest',     secondary:['Triceps','Front Delts'],        tip:'Greater ROM than barbell. Touch chest at bottom.'},
+    {name:'Incline Barbell Press',  met:7.5,equip:'Barbell',    head:'Upper Chest',     session:'B',type:'compound',  difficulty:'intermediate',primary:'Chest',     secondary:['Front Delts','Triceps'],        tip:'30-45 degrees. Any higher shifts to shoulders.'},
+    {name:'Incline Dumbbell Press', met:7.0,equip:'Dumbbell',   head:'Upper Chest',     session:'B',type:'compound',  difficulty:'beginner',    primary:'Chest',     secondary:['Front Delts','Triceps'],        tip:'Dumbbells allow deeper stretch at bottom.'},
+    {name:'Decline Bench Press',    met:7.0,equip:'Barbell',    head:'Lower Chest',     session:'B',type:'compound',  difficulty:'intermediate',primary:'Chest',     secondary:['Triceps'],                      tip:'Targets lower pec sweep.'},
+    {name:'Chest Dip',              met:7.0,equip:'Bodyweight', head:'Lower Chest',     session:'A',type:'compound',  difficulty:'intermediate',primary:'Chest',     secondary:['Triceps','Front Delts'],        tip:'Lean forward 30 degrees. Lower until stretch.'},
+    {name:'Push-Up',                met:6.0,equip:'Bodyweight', head:'Mid Chest',       session:'A',type:'compound',  difficulty:'beginner',    primary:'Chest',     secondary:['Triceps','Core'],               tip:'Full range. Hands slightly wider than shoulders.'},
+    {name:'Cable Chest Fly',        met:5.0,equip:'Cable',      head:'Inner Chest',     session:'A',type:'isolation', difficulty:'beginner',    primary:'Chest',     secondary:['Front Delts'],                  tip:'Constant tension. Squeeze at top.'},
+    {name:'Dumbbell Chest Fly',     met:5.0,equip:'Dumbbell',   head:'Mid Chest',       session:'B',type:'isolation', difficulty:'beginner',    primary:'Chest',     secondary:['Front Delts'],                  tip:'Slight bend in elbows. Deep stretch.'},
+    {name:'Pec Deck Machine',       met:4.5,equip:'Machine',    head:'Inner Chest',     session:'B',type:'isolation', difficulty:'beginner',    primary:'Chest',     secondary:[],                               tip:'Squeeze hard at centre. Control eccentric.'},
+    {name:'Landmine Press',         met:6.5,equip:'Barbell',    head:'Upper Chest',     session:'B',type:'compound',  difficulty:'intermediate',primary:'Chest',     secondary:['Shoulders','Triceps'],          tip:'Unique arc hits upper chest. Shoulder-friendly.'},
+    {name:'Svend Press',            met:4.5,equip:'Plates',     head:'Inner Chest',     session:'A',type:'isolation', difficulty:'beginner',    primary:'Chest',     secondary:[],                               tip:'Press two plates together and push forward.'},
+    {name:'Floor Press',            met:7.0,equip:'Barbell',    head:'Mid Chest',       session:'B',type:'compound',  difficulty:'intermediate',primary:'Chest',     secondary:['Triceps'],                      tip:'Arms stop when triceps touch floor.'},
+    {name:'Single-Arm DB Press',    met:6.5,equip:'Dumbbell',   head:'Mid Chest',       session:'B',type:'compound',  difficulty:'intermediate',primary:'Chest',     secondary:['Core','Triceps'],               tip:'Forces core stability. Fixes imbalance.'},
   ],
   'Back': [
-    // Session A — Horizontal pull / thickness
-    {name:'Barbell Row',met:8.0,equip:'Barbell',head:'Rhomboids/Traps',session:'A',tip:'Chest parallel to floor. Pull to lower chest.'},
-    {name:'Dumbbell Row',met:7.0,equip:'Dumbbell',head:'Lats/Rhomboids',session:'A',tip:'Full stretch at bottom. Elbow past torso at top.'},
-    {name:'Seal Row',met:7.0,equip:'Barbell',head:'Mid Back',session:'A',tip:'Chest pinned to bench — zero momentum. Humbling weight. Incredible isolation.'},
-    {name:'Seated Cable Row',met:6.0,equip:'Cable',head:'Mid Back',session:'A',tip:'Lean back slightly at top. Full stretch forward.'},
-    {name:'T-Bar Row',met:8.0,equip:'Barbell',head:'Thickness',session:'A',tip:'Chest supported = more back activation. V-handle for width.'},
-    // Session B — Vertical pull / width
-    {name:'Deadlift',met:9.0,equip:'Barbell',head:'Lower Back/Lats',session:'B',tip:'Push the floor away. Bar stays close to body.'},
-    {name:'Pull-Up',met:8.0,equip:'Bodyweight',head:'Lats/Width',session:'B',tip:'Full hang at bottom. Chin over bar at top.'},
-    {name:'Chin-Up',met:8.0,equip:'Bodyweight',head:'Lats/Biceps',session:'B',tip:'Supinated grip recruits biceps more. Great combo.'},
-    {name:'Lat Pulldown',met:6.5,equip:'Cable',head:'Lats/Width',session:'B',tip:'Pull to upper chest, not behind neck. Slight lean back.'},
-    {name:'Meadows Row',met:7.5,equip:'Barbell',head:'Upper Lats/Rear Delt',session:'B',tip:'Landmine variation by John Meadows. Stagger stance, row with full ROM. Hits upper lats from unique angle.'},
-    // Always available
-    {name:'Face Pull',met:4.5,equip:'Cable',head:'Rear Delt/Rotator Cuff',session:'A',tip:'Pull to forehead, thumbs back. Protects shoulder health.'},
-    {name:'Straight Arm Pulldown',met:5.0,equip:'Cable',head:'Lats',session:'B',tip:'Arms straight throughout. Pure lat isolation.'},
-    {name:'Pendlay Row',met:8.0,equip:'Barbell',head:'Explosive Power',session:'A',tip:'Dead stop on floor each rep. Builds explosive pulling power.'},
-    {name:'Chest Supported Row',met:6.5,equip:'Dumbbell',head:'Mid Back',session:'B',tip:'Incline bench at 45°, chest down. No lower back involvement.'},
-    {name:'Romanian Deadlift',met:8.0,equip:'Barbell',head:'Lower Back/Hamstrings',session:'B',tip:'Hips back, bar close to legs. Feel the hamstring stretch.'},
+    {name:'Deadlift',               met:9.0,equip:'Barbell',    head:'Lower Back/Lats', session:'B',type:'compound',  difficulty:'intermediate',primary:'Back',      secondary:['Glutes','Hamstrings','Traps'],  tip:'Push floor away. Bar stays close to body.'},
+    {name:'Barbell Row',            met:8.0,equip:'Barbell',    head:'Mid Back',        session:'A',type:'compound',  difficulty:'intermediate',primary:'Back',      secondary:['Biceps','Rear Delts'],          tip:'Chest parallel to floor. Pull to lower chest.'},
+    {name:'Dumbbell Row',           met:7.0,equip:'Dumbbell',   head:'Lats',            session:'A',type:'compound',  difficulty:'beginner',    primary:'Back',      secondary:['Biceps','Rear Delts'],          tip:'Full stretch at bottom. Elbow past torso at top.'},
+    {name:'Pull-Up',                met:8.0,equip:'Bodyweight', head:'Lats/Width',      session:'B',type:'compound',  difficulty:'intermediate',primary:'Back',      secondary:['Biceps','Core'],                tip:'Full hang at bottom. Chin over bar at top.'},
+    {name:'Chin-Up',                met:8.0,equip:'Bodyweight', head:'Lats/Biceps',     session:'A',type:'compound',  difficulty:'intermediate',primary:'Back',      secondary:['Biceps'],                       tip:'Supinated grip recruits biceps more.'},
+    {name:'Lat Pulldown',           met:6.5,equip:'Cable',      head:'Lats/Width',      session:'B',type:'compound',  difficulty:'beginner',    primary:'Back',      secondary:['Biceps','Rear Delts'],          tip:'Pull to upper chest. Slight lean back.'},
+    {name:'Seated Cable Row',       met:6.0,equip:'Cable',      head:'Mid Back',        session:'A',type:'compound',  difficulty:'beginner',    primary:'Back',      secondary:['Biceps'],                       tip:'Lean back slightly at top. Full stretch forward.'},
+    {name:'T-Bar Row',              met:8.0,equip:'Barbell',    head:'Thickness',       session:'A',type:'compound',  difficulty:'intermediate',primary:'Back',      secondary:['Biceps','Rear Delts'],          tip:'Chest supported = more back activation.'},
+    {name:'Seal Row',               met:7.0,equip:'Barbell',    head:'Mid Back',        session:'B',type:'compound',  difficulty:'intermediate',primary:'Back',      secondary:['Biceps'],                       tip:'Chest pinned to bench. Zero momentum. Pure isolation.'},
+    {name:'Meadows Row',            met:7.5,equip:'Barbell',    head:'Upper Lats',      session:'B',type:'compound',  difficulty:'advanced',    primary:'Back',      secondary:['Rear Delts','Biceps'],          tip:'Landmine variation. Stagger stance. Full ROM.'},
+    {name:'Kroc Row',               met:8.0,equip:'Dumbbell',   head:'Lats',            session:'B',type:'compound',  difficulty:'intermediate',primary:'Back',      secondary:['Biceps','Core'],                tip:'Heavy DB, high reps. One of the best lat mass builders.'},
+    {name:'Face Pull',              met:4.5,equip:'Cable',      head:'Rear Delt',       session:'A',type:'isolation', difficulty:'beginner',    primary:'Rear Delts',secondary:['Rotator Cuff','Traps'],         tip:'Pull to forehead, thumbs back. Protects shoulder health.'},
+    {name:'Straight Arm Pulldown',  met:5.0,equip:'Cable',      head:'Lats',            session:'B',type:'isolation', difficulty:'beginner',    primary:'Back',      secondary:[],                               tip:'Arms straight throughout. Pure lat isolation.'},
+    {name:'Pendlay Row',            met:8.0,equip:'Barbell',    head:'Mid Back',        session:'A',type:'compound',  difficulty:'advanced',    primary:'Back',      secondary:['Biceps','Core'],                tip:'Dead stop on floor each rep. Explosive pulling.'},
+    {name:'Romanian Deadlift',      met:8.0,equip:'Barbell',    head:'Lower Back',      session:'B',type:'compound',  difficulty:'intermediate',primary:'Back',      secondary:['Hamstrings','Glutes'],          tip:'Hips back, bar close to legs. Feel the hamstring stretch.'},
   ],
   'Shoulders': [
-    // Session A — Front/Side delt
-    {name:'Overhead Press (Barbell)',met:7.5,equip:'Barbell',head:'Front + Side Delt',session:'A',tip:'Bar clears face then push vertically. Core braced.'},
-    {name:'Dumbbell Shoulder Press',met:7.0,equip:'Dumbbell',head:'Front + Side Delt',session:'A',tip:'Neutral grip option reduces shoulder strain.'},
-    {name:'Lateral Raise',met:4.0,equip:'Dumbbell',head:'Side Delt',session:'A',tip:'Lead with elbows. Slight forward lean. 15-20 reps.'},
-    {name:'Cable Lateral Raise',met:4.0,equip:'Cable',head:'Side Delt',session:'A',tip:'Constant tension vs dumbbells. Great for mind-muscle.'},
-    {name:'Front Raise',met:4.0,equip:'Dumbbell',head:'Front Delt',session:'A',tip:'Alternate arms. Stop at eye level.'},
-    // Session B — Rear delt / unique
-    {name:'Arnold Press',met:6.5,equip:'Dumbbell',head:'All Delt Heads',session:'B',tip:'Full rotation engages all three heads. Slow and controlled.'},
-    {name:'Rear Delt Fly',met:4.5,equip:'Dumbbell',head:'Rear Delt',session:'B',tip:'Bend 90° at hips. Lead with elbows, not hands.'},
-    {name:'Band Pull-Apart',met:3.5,equip:'Band',head:'Rear Delt/Upper Back',session:'B',tip:'Pull band to chest with straight arms. Improves posture.'},
-    {name:'W-Raise (Face Down)',met:3.5,equip:'Dumbbell',head:'Rear Delt/Lower Trap',session:'B',tip:'Lie face down on incline. Form W shape with arms. Incredible rear delt isolation.'},
-    {name:'Upright Row',met:6.0,equip:'Barbell',head:'Side Delt/Traps',session:'B',tip:'Wide grip (shoulder width) to protect rotator cuff.'},
-    // Always available
-    {name:'Machine Shoulder Press',met:6.5,equip:'Machine',head:'Front + Side Delt',session:'A',tip:'Adjust seat so handles are at shoulder height.'},
-    {name:'Shrugs',met:5.5,equip:'Barbell',head:'Traps',session:'A',tip:'Full ROM. Pause at top for 1 second.'},
-    {name:'Landmine Lateral Raise',met:4.0,equip:'Barbell',head:'Side Delt',session:'B',tip:'One end of barbell. Arc motion = constant tension on side delt.'},
-    {name:'Reverse Cable Crossover',met:4.0,equip:'Cable',head:'Rear Delt',session:'B',tip:'Cables crossed at chest height. Pull apart and back. Dr Milo Wolf rates this the only exercise with full rear delt stretch.'},
-    {name:'Powell Raise',met:3.5,equip:'Dumbbell',head:'Rear Delt + Rotator Cuff',session:'B',tip:'Lie on side on incline bench. Raise top arm up and back. Rare but highly effective rear delt isolator.'},
+    {name:'Overhead Press (Barbell)',met:7.5,equip:'Barbell',   head:'Front+Side Delt', session:'A',type:'compound',  difficulty:'intermediate',primary:'Shoulders', secondary:['Triceps','Traps'],              tip:'Bar clears face then push vertically. Core braced.'},
+    {name:'Dumbbell Shoulder Press',met:7.0,equip:'Dumbbell',   head:'Front+Side Delt', session:'A',type:'compound',  difficulty:'beginner',    primary:'Shoulders', secondary:['Triceps'],                      tip:'Neutral grip option reduces shoulder strain.'},
+    {name:'Arnold Press',           met:6.5,equip:'Dumbbell',   head:'All Delt Heads',  session:'B',type:'compound',  difficulty:'intermediate',primary:'Shoulders', secondary:['Triceps','Traps'],              tip:'Full rotation engages all three heads.'},
+    {name:'Lateral Raise',          met:4.0,equip:'Dumbbell',   head:'Side Delt',       session:'A',type:'isolation', difficulty:'beginner',    primary:'Shoulders', secondary:['Traps'],                        tip:'Lead with elbows. Slight forward lean. 15-20 reps.'},
+    {name:'Cable Lateral Raise',    met:4.0,equip:'Cable',      head:'Side Delt',       session:'B',type:'isolation', difficulty:'beginner',    primary:'Shoulders', secondary:[],                               tip:'Constant tension vs dumbbells.'},
+    {name:'Front Raise',            met:4.0,equip:'Dumbbell',   head:'Front Delt',      session:'A',type:'isolation', difficulty:'beginner',    primary:'Shoulders', secondary:[],                               tip:'Alternate arms. Stop at eye level.'},
+    {name:'Rear Delt Fly',          met:4.5,equip:'Dumbbell',   head:'Rear Delt',       session:'B',type:'isolation', difficulty:'beginner',    primary:'Rear Delts',secondary:[],                              tip:'Bend 90 at hips. Lead with elbows.'},
+    {name:'Band Pull-Apart',        met:3.5,equip:'Band',       head:'Rear Delt',       session:'B',type:'isolation', difficulty:'beginner',    primary:'Rear Delts',secondary:['Traps'],                       tip:'Pull band to chest with straight arms.'},
+    {name:'W-Raise',                met:3.5,equip:'Dumbbell',   head:'Rear Delt',       session:'B',type:'isolation', difficulty:'beginner',    primary:'Rear Delts',secondary:['Lower Trap'],                  tip:'Lie face down on incline. Form W shape.'},
+    {name:'Upright Row',            met:6.0,equip:'Barbell',    head:'Side Delt/Traps', session:'B',type:'compound',  difficulty:'intermediate',primary:'Shoulders', secondary:['Traps','Biceps'],               tip:'Wide grip to protect rotator cuff.'},
+    {name:'Shrugs',                 met:5.5,equip:'Barbell',    head:'Traps',           session:'A',type:'isolation', difficulty:'beginner',    primary:'Shoulders', secondary:[],                               tip:'Full ROM. Pause at top for 1 second.'},
+    {name:'Reverse Cable Crossover',met:4.0,equip:'Cable',      head:'Rear Delt',       session:'B',type:'isolation', difficulty:'beginner',    primary:'Rear Delts',secondary:[],                              tip:'Cables crossed at chest height. Pull apart and back.'},
+    {name:'Powell Raise',           met:3.5,equip:'Dumbbell',   head:'Rear Delt',       session:'B',type:'isolation', difficulty:'intermediate',primary:'Rear Delts',secondary:['Rotator Cuff'],                tip:'Lie on side on incline. Raise top arm up and back.'},
+    {name:'Landmine Lateral Raise', met:4.0,equip:'Barbell',    head:'Side Delt',       session:'B',type:'isolation', difficulty:'intermediate',primary:'Shoulders', secondary:[],                               tip:'One end of barbell. Arc motion = constant tension.'},
+    {name:'Machine Shoulder Press', met:6.5,equip:'Machine',    head:'Front+Side Delt', session:'A',type:'compound',  difficulty:'beginner',    primary:'Shoulders', secondary:['Triceps'],                      tip:'Adjust seat so handles are at shoulder height.'},
   ],
   'Biceps': [
-    // Session A — Long head (peak) + Brachialis
-    {name:'Incline Dumbbell Curl',met:4.5,equip:'Dumbbell',head:'Long Head (Peak)',session:'A',tip:'Incline bench stretches long head at bottom. More peak.'},
-    {name:'Hammer Curl',met:4.5,equip:'Dumbbell',head:'Brachialis + Thickness',session:'A',tip:'Neutral grip hits brachialis — makes arms look thick.'},
-    {name:'Reverse Curl',met:4.0,equip:'Barbell',head:'Brachialis + Brachioradialis',session:'A',tip:'Pronated grip. Builds the muscle under the bicep.'},
-    {name:'Drag Curl',met:4.5,equip:'Barbell',head:'Long Head',session:'A',tip:'Drag bar up torso keeping elbows back. Eliminates front delt. Pure bicep.'},
-    {name:'Zottman Curl',met:4.5,equip:'Dumbbell',head:'All Heads + Forearms',session:'A',tip:'Curl up supinated, rotate to pronated, lower slowly. Two-in-one arm builder.'},
-    // Session B — Short head (width) + Peak isolation
-    {name:'Preacher Curl',met:4.5,equip:'Barbell',head:'Short Head (Width)',session:'B',tip:'Arm pinned on pad = zero cheating. Full stretch at bottom.'},
-    {name:'Concentration Curl',met:4.0,equip:'Dumbbell',head:'Short Head (Width)',session:'B',tip:'Elbow against inner thigh. Rotate pinky up at top.'},
-    {name:'EZ-Bar Curl',met:4.5,equip:'Barbell',head:'Both Heads',session:'B',tip:'Angled grip reduces wrist strain. Heavy loading.'},
-    {name:'Spider Curl',met:4.5,equip:'Dumbbell',head:'Short Head + Peak',session:'B',tip:'Chest against vertical side of incline bench. Arms hang straight down. Peak contraction on every rep.'},
-    {name:'Cable Curl',met:4.5,equip:'Cable',head:'Both Heads',session:'B',tip:'Constant tension through full ROM. Great for finisher.'},
-    // Always available
-    {name:'Barbell Curl',met:4.5,equip:'Barbell',head:'Both Heads',session:'A',tip:'Full ROM. Pause at top. No swinging.'},
-    {name:'Dumbbell Curl',met:4.5,equip:'Dumbbell',head:'Both Heads',session:'A',tip:'Supinate wrist as you curl. Full ROM.'},
-    {name:'Cable Hammer Curl',met:4.5,equip:'Cable',head:'Brachialis',session:'B',tip:'Rope attachment. Neutral grip throughout.'},
-    {name:'Bayesian Curl',met:4.5,equip:'Cable',head:'Long Head Stretch',session:'B',tip:'Cable behind you at hip height. Curl forward. Maximum long head stretch at bottom. Science-backed for hypertrophy.'},
-    {name:'Incline Hammer Curl',met:4.5,equip:'Dumbbell',head:'Brachialis + Long Head',session:'A',tip:'Incline bench, neutral grip. Arms hang behind body for maximum stretch on both heads.'},
+    {name:'Barbell Curl',           met:4.5,equip:'Barbell',    head:'Both Heads',      session:'A',type:'compound',  difficulty:'beginner',    primary:'Biceps',    secondary:['Brachialis','Forearms'],        tip:'Full ROM. Pause at top. No swinging.'},
+    {name:'Dumbbell Curl',          met:4.5,equip:'Dumbbell',   head:'Both Heads',      session:'A',type:'isolation', difficulty:'beginner',    primary:'Biceps',    secondary:['Brachialis'],                   tip:'Supinate wrist as you curl. Full ROM.'},
+    {name:'Incline Dumbbell Curl',  met:4.5,equip:'Dumbbell',   head:'Long Head (Peak)',session:'A',type:'isolation', difficulty:'beginner',    primary:'Biceps',    secondary:['Brachialis'],                   tip:'Incline bench stretches long head. More peak.'},
+    {name:'Hammer Curl',            met:4.5,equip:'Dumbbell',   head:'Brachialis',      session:'A',type:'isolation', difficulty:'beginner',    primary:'Biceps',    secondary:['Brachioradialis','Forearms'],   tip:'Neutral grip. Builds arm thickness.'},
+    {name:'Preacher Curl',          met:4.5,equip:'Barbell',    head:'Short Head (Width)',session:'B',type:'isolation',difficulty:'beginner',   primary:'Biceps',    secondary:[],                               tip:'Arm pinned on pad. Full stretch at bottom.'},
+    {name:'Concentration Curl',     met:4.0,equip:'Dumbbell',   head:'Short Head (Width)',session:'B',type:'isolation',difficulty:'beginner',   primary:'Biceps',    secondary:[],                               tip:'Elbow against inner thigh. Rotate pinky up at top.'},
+    {name:'EZ-Bar Curl',            met:4.5,equip:'Barbell',    head:'Both Heads',      session:'B',type:'compound',  difficulty:'beginner',    primary:'Biceps',    secondary:['Brachialis'],                   tip:'Angled grip reduces wrist strain. Heavy loading.'},
+    {name:'Spider Curl',            met:4.5,equip:'Dumbbell',   head:'Short Head+Peak', session:'B',type:'isolation', difficulty:'beginner',    primary:'Biceps',    secondary:[],                               tip:'Chest against incline bench vertical side. Arms hang down.'},
+    {name:'Cable Curl',             met:4.5,equip:'Cable',      head:'Both Heads',      session:'B',type:'isolation', difficulty:'beginner',    primary:'Biceps',    secondary:[],                               tip:'Constant tension through full ROM.'},
+    {name:'Drag Curl',              met:4.5,equip:'Barbell',    head:'Long Head',       session:'A',type:'isolation', difficulty:'intermediate',primary:'Biceps',    secondary:[],                               tip:'Drag bar up torso keeping elbows back. Pure bicep.'},
+    {name:'Zottman Curl',           met:4.5,equip:'Dumbbell',   head:'All Heads',       session:'A',type:'isolation', difficulty:'intermediate',primary:'Biceps',    secondary:['Forearms'],                     tip:'Curl up supinated, rotate to pronated, lower slowly.'},
+    {name:'Reverse Curl',           met:4.0,equip:'Barbell',    head:'Brachialis',      session:'A',type:'isolation', difficulty:'beginner',    primary:'Biceps',    secondary:['Brachioradialis'],              tip:'Pronated grip. Builds the muscle under the bicep.'},
+    {name:'Cable Hammer Curl',      met:4.5,equip:'Cable',      head:'Brachialis',      session:'B',type:'isolation', difficulty:'beginner',    primary:'Biceps',    secondary:['Forearms'],                     tip:'Rope attachment. Neutral grip throughout.'},
+    {name:'Bayesian Curl',          met:4.5,equip:'Cable',      head:'Long Head Stretch',session:'B',type:'isolation',difficulty:'intermediate',primary:'Biceps',   secondary:[],                               tip:'Cable behind you. Maximum long head stretch at bottom.'},
+    {name:'Incline Hammer Curl',    met:4.5,equip:'Dumbbell',   head:'Brachialis+Long', session:'A',type:'isolation', difficulty:'beginner',    primary:'Biceps',    secondary:['Brachialis'],                   tip:'Incline bench, neutral grip. Arms hang behind body.'},
   ],
   'Triceps': [
-    // Session A — Long head (biggest head, ~50% of tricep)
-    {name:'Skull Crusher',met:5.0,equip:'Barbell',head:'Long + Lateral Head',session:'A',tip:'Lower to forehead slowly. Elbows stay fixed.'},
-    {name:'Overhead Tricep Extension',met:5.0,equip:'Dumbbell',head:'Long Head',session:'A',tip:'Overhead position maximally stretches long head.'},
-    {name:'Tricep Dip',met:7.0,equip:'Bodyweight',head:'All Heads',session:'A',tip:'Upright torso = more tricep, less chest.'},
-    {name:'JM Press',met:6.5,equip:'Barbell',head:'Long + Medial Head',session:'A',tip:'Hybrid bench press/skull crusher. Heavy tricep loading. Bar path between forehead and chin.'},
-    // Session B — Lateral and Medial head
-    {name:'Tricep Pushdown',met:4.5,equip:'Cable',head:'Lateral + Medial Head',session:'B',tip:'Elbows pinned to sides. Full extension at bottom.'},
-    {name:'Close Grip Bench Press',met:7.0,equip:'Barbell',head:'All Heads',session:'B',tip:'Shoulder-width grip. Elbows tucked. Heavy compound.'},
-    {name:'Cable Overhead Extension',met:4.5,equip:'Cable',head:'Long Head',session:'B',tip:'Face away from cable. Rope overhead.'},
-    {name:'Tate Press',met:4.5,equip:'Dumbbell',head:'Medial Head',session:'B',tip:'Dumbbells tap the chest. Unique path hits medial head.'},
-    {name:'Diamond Push-Up',met:6.0,equip:'Bodyweight',head:'Medial + Lateral Head',session:'B',tip:'Hands form diamond. Elbows flare out = more tricep.'},
-    // Always available
-    {name:'Rope Pushdown',met:4.5,equip:'Cable',head:'Lateral Head',session:'A',tip:'Split rope at bottom for better contraction.'},
-    {name:'Kickback',met:4.0,equip:'Dumbbell',head:'Lateral Head',session:'B',tip:'Upper arm parallel to floor. Slow eccentric.'},
-    {name:'Tricep Machine Pushdown',met:4.5,equip:'Machine',head:'All Heads',session:'A',tip:'Constant tension. Adjust seat so elbows are at handle height.'},
-    {name:'Katana Extension',met:4.5,equip:'Cable',head:'Long Head (S-tier)',session:'B',tip:'Facing cable, grab handles, spin 180 degrees. Arms overhead. Jeff Nippard rates this S-tier. Incredible long head stretch.'},
-    {name:'Cross-Cable Tricep Extension',met:4.5,equip:'Cable',head:'All Heads',session:'B',tip:'Two cable stations, arms crossed overhead. Unparalleled constant tension throughout full ROM.'},
+    {name:'Close Grip Bench Press', met:7.0,equip:'Barbell',    head:'All Heads',       session:'B',type:'compound',  difficulty:'intermediate',primary:'Triceps',   secondary:['Chest','Front Delts'],          tip:'Shoulder-width grip. Elbows tucked. Heavy compound.'},
+    {name:'Tricep Dip',             met:7.0,equip:'Bodyweight', head:'All Heads',       session:'A',type:'compound',  difficulty:'intermediate',primary:'Triceps',   secondary:['Chest','Shoulders'],            tip:'Upright torso = more tricep, less chest.'},
+    {name:'Skull Crusher',          met:5.0,equip:'Barbell',    head:'Long+Lateral',    session:'A',type:'compound',  difficulty:'intermediate',primary:'Triceps',   secondary:[],                               tip:'Lower to forehead slowly. Elbows stay fixed.'},
+    {name:'Overhead Tricep Extension',met:5.0,equip:'Dumbbell', head:'Long Head',       session:'A',type:'isolation', difficulty:'beginner',    primary:'Triceps',   secondary:[],                               tip:'Overhead maximally stretches long head.'},
+    {name:'Tricep Pushdown',        met:4.5,equip:'Cable',      head:'Lateral+Medial',  session:'B',type:'isolation', difficulty:'beginner',    primary:'Triceps',   secondary:[],                               tip:'Elbows pinned. Full extension at bottom.'},
+    {name:'Rope Pushdown',          met:4.5,equip:'Cable',      head:'Lateral Head',    session:'A',type:'isolation', difficulty:'beginner',    primary:'Triceps',   secondary:[],                               tip:'Split rope at bottom for better contraction.'},
+    {name:'Cable Overhead Extension',met:4.5,equip:'Cable',     head:'Long Head',       session:'B',type:'isolation', difficulty:'beginner',    primary:'Triceps',   secondary:[],                               tip:'Face away from cable. Rope overhead.'},
+    {name:'Diamond Push-Up',        met:6.0,equip:'Bodyweight', head:'Medial+Lateral',  session:'B',type:'compound',  difficulty:'intermediate',primary:'Triceps',   secondary:['Chest'],                        tip:'Hands form diamond. Elbows flare out = more tricep.'},
+    {name:'Tate Press',             met:4.5,equip:'Dumbbell',   head:'Medial Head',     session:'B',type:'isolation', difficulty:'intermediate',primary:'Triceps',   secondary:[],                               tip:'Dumbbells tap chest. Unique path hits medial head.'},
+    {name:'JM Press',               met:6.5,equip:'Barbell',    head:'Long+Medial',     session:'A',type:'compound',  difficulty:'advanced',    primary:'Triceps',   secondary:[],                               tip:'Hybrid bench/skull crusher. Bar path between forehead and chin.'},
+    {name:'Kickback',               met:4.0,equip:'Dumbbell',   head:'Lateral Head',    session:'B',type:'isolation', difficulty:'beginner',    primary:'Triceps',   secondary:[],                               tip:'Upper arm parallel to floor. Slow eccentric.'},
+    {name:'Tricep Machine Pushdown',met:4.5,equip:'Machine',    head:'All Heads',       session:'A',type:'isolation', difficulty:'beginner',    primary:'Triceps',   secondary:[],                               tip:'Constant tension. Adjust seat so elbows at handle height.'},
+    {name:'Katana Extension',       met:4.5,equip:'Cable',      head:'Long Head',       session:'B',type:'isolation', difficulty:'intermediate',primary:'Triceps',   secondary:[],                               tip:'Facing cable, grab handles, spin 180 degrees. Arms overhead.'},
+    {name:'Cross-Cable Extension',  met:4.5,equip:'Cable',      head:'All Heads',       session:'B',type:'isolation', difficulty:'intermediate',primary:'Triceps',   secondary:[],                               tip:'Two cable stations, arms crossed overhead. Unparalleled constant tension.'},
   ],
   'Legs': [
-    // Session A — Quad dominant
-    {name:'Barbell Squat',met:9.0,equip:'Barbell',head:'Quads + Glutes',session:'A',tip:'Hip width stance. Knees track over toes. Break parallel.'},
-    {name:'Leg Press',met:7.5,equip:'Machine',head:'Quads + Glutes',session:'A',tip:'Foot position changes emphasis. High + wide = glutes.'},
-    {name:'Leg Extension',met:5.0,equip:'Machine',head:'Quads (Isolation)',session:'A',tip:'Pause at top. Control the lowering phase.'},
-    {name:'Hack Squat',met:8.0,equip:'Machine',head:'Quads (VMO)',session:'A',tip:'Narrow foot placement hits VMO (teardrop muscle).'},
-    {name:'Goblet Squat',met:8.0,equip:'Dumbbell',head:'Quads + Core',session:'A',tip:'Dumbbell at chest. Elbows push knees out.'},
-    {name:'Zercher Squat',met:9.0,equip:'Barbell',head:'Quads + Core + Glutes',session:'A',tip:'Bar in crook of elbows. Extremely hard on core. Builds raw leg and core strength.'},
-    {name:'Paused Squat',met:9.0,equip:'Barbell',head:'Quads (Strength)',session:'A',tip:'3-second pause at bottom. Eliminates stretch reflex. Brutal quad builder.'},
-    {name:'Cyclist Squat',met:7.5,equip:'Barbell',head:'Quads (VMO)',session:'A',tip:'Heels elevated, upright torso. Isolates quads like leg extension but compound.'},
-    // Session B — Posterior chain / Hip dominant
-    {name:'Romanian Deadlift',met:8.0,equip:'Barbell',head:'Hamstrings + Glutes',session:'B',tip:'Push hips back. Bar close to legs. Feel the stretch.'},
-    {name:'Bulgarian Split Squat',met:8.0,equip:'Dumbbell',head:'Quads + Glutes',session:'B',tip:'Rear foot elevated. Front shin vertical. Deep stretch.'},
-    {name:'Walking Lunge',met:7.0,equip:'Dumbbell',head:'Quads + Glutes',session:'B',tip:'Step through. Knee should not touch floor.'},
-    {name:'Leg Curl',met:5.0,equip:'Machine',head:'Hamstrings',session:'B',tip:'Toes pointed down increases stretch.'},
-    {name:'Nordic Hamstring Curl',met:6.0,equip:'Bodyweight',head:'Hamstrings (Eccentric)',session:'B',tip:'Most effective hamstring exercise per research. Lower slowly. Prevents injury.'},
-    // Always available
-    {name:'Front Squat',met:9.0,equip:'Barbell',head:'Quads + Core',session:'A',tip:'More upright torso. Cross-arm or clean grip.'},
-    {name:'Step Up',met:6.5,equip:'Dumbbell',head:'Quads + Glutes',session:'A',tip:'Box at knee height. Drive through heel.'},
-    {name:'Hip Thrust',met:7.0,equip:'Barbell',head:'Glutes',session:'B',tip:'Shoulders on bench. Squeeze glutes at top.'},
+    {name:'Barbell Squat',          met:9.0,equip:'Barbell',    head:'Quads+Glutes',    session:'A',type:'compound',  difficulty:'intermediate',primary:'Legs',      secondary:['Glutes','Hamstrings','Core'],   tip:'Hip width. Knees track toes. Break parallel.'},
+    {name:'Leg Press',              met:7.5,equip:'Machine',    head:'Quads+Glutes',    session:'A',type:'compound',  difficulty:'beginner',    primary:'Legs',      secondary:['Glutes'],                       tip:'Foot position changes emphasis. High+wide = glutes.'},
+    {name:'Front Squat',            met:9.0,equip:'Barbell',    head:'Quads+Core',      session:'B',type:'compound',  difficulty:'advanced',    primary:'Legs',      secondary:['Core','Glutes'],                tip:'More upright torso. Cross-arm or clean grip.'},
+    {name:'Hack Squat',             met:8.0,equip:'Machine',    head:'Quads (VMO)',     session:'A',type:'compound',  difficulty:'intermediate',primary:'Legs',      secondary:['Glutes'],                       tip:'Narrow foot placement hits VMO.'},
+    {name:'Goblet Squat',           met:8.0,equip:'Dumbbell',   head:'Quads+Core',      session:'A',type:'compound',  difficulty:'beginner',    primary:'Legs',      secondary:['Core','Glutes'],                tip:'Dumbbell at chest. Elbows push knees out.'},
+    {name:'Cyclist Squat',          met:7.5,equip:'Barbell',    head:'Quads (VMO)',     session:'A',type:'compound',  difficulty:'intermediate',primary:'Legs',      secondary:[],                               tip:'Heels elevated, upright torso. Isolates quads.'},
+    {name:'Zercher Squat',          met:9.0,equip:'Barbell',    head:'Quads+Core',      session:'A',type:'compound',  difficulty:'advanced',    primary:'Legs',      secondary:['Core','Glutes'],                tip:'Bar in crook of elbows. Extreme core challenge.'},
+    {name:'Paused Squat',           met:9.0,equip:'Barbell',    head:'Quads (Strength)',session:'B',type:'compound',  difficulty:'advanced',    primary:'Legs',      secondary:['Glutes','Core'],                tip:'3-second pause at bottom. Eliminates stretch reflex.'},
+    {name:'Leg Extension',          met:5.0,equip:'Machine',    head:'Quads (Isolation)',session:'A',type:'isolation',difficulty:'beginner',    primary:'Legs',      secondary:[],                               tip:'Pause at top. Control the lowering phase.'},
+    {name:'Step Up',                met:6.5,equip:'Dumbbell',   head:'Quads+Glutes',    session:'B',type:'compound',  difficulty:'beginner',    primary:'Legs',      secondary:['Glutes'],                       tip:'Box at knee height. Drive through heel.'},
+    {name:'Romanian Deadlift',      met:8.0,equip:'Barbell',    head:'Hamstrings+Glutes',session:'B',type:'compound', difficulty:'intermediate',primary:'Hamstrings',secondary:['Glutes','Lower Back'],          tip:'Push hips back. Bar close to legs.'},
+    {name:'Bulgarian Split Squat',  met:8.0,equip:'Dumbbell',   head:'Quads+Glutes',    session:'B',type:'compound',  difficulty:'intermediate',primary:'Legs',      secondary:['Glutes','Hamstrings'],          tip:'Rear foot elevated. Front shin vertical. Deep stretch.'},
+    {name:'Walking Lunge',          met:7.0,equip:'Dumbbell',   head:'Quads+Glutes',    session:'B',type:'compound',  difficulty:'beginner',    primary:'Legs',      secondary:['Glutes','Hamstrings'],          tip:'Step through. Knee should not touch floor.'},
+    {name:'Leg Curl',               met:5.0,equip:'Machine',    head:'Hamstrings',      session:'B',type:'isolation', difficulty:'beginner',    primary:'Hamstrings',secondary:[],                              tip:'Toes pointed down increases stretch.'},
+    {name:'Nordic Hamstring Curl',  met:6.0,equip:'Bodyweight', head:'Hamstrings (Eccentric)',session:'B',type:'compound',difficulty:'advanced', primary:'Hamstrings',secondary:[],                              tip:'Lower as slow as possible. Best injury prevention.'},
+    {name:'Hip Thrust',             met:7.0,equip:'Barbell',    head:'Glutes',          session:'B',type:'compound',  difficulty:'intermediate',primary:'Glutes',    secondary:['Hamstrings'],                   tip:'Shoulders on bench. Squeeze glutes at top.'},
+    {name:'Cable Kickback',         met:4.5,equip:'Cable',      head:'Glutes (Isolation)',session:'A',type:'isolation',difficulty:'beginner',  primary:'Glutes',    secondary:[],                               tip:'Slight forward lean. Squeeze at top of kick.'},
+    {name:'Standing Calf Raise',    met:4.0,equip:'Machine',    head:'Gastrocnemius',   session:'A',type:'isolation', difficulty:'beginner',    primary:'Calves',    secondary:[],                               tip:'Full ROM. Deep stretch at bottom. Full contraction.'},
+    {name:'Seated Calf Raise',      met:3.5,equip:'Machine',    head:'Soleus',          session:'B',type:'isolation', difficulty:'beginner',    primary:'Calves',    secondary:[],                               tip:'Knee bent = soleus. Builds calf thickness.'},
+    {name:'Single-Leg Calf Raise',  met:4.0,equip:'Bodyweight', head:'Gastrocnemius',   session:'A',type:'isolation', difficulty:'beginner',    primary:'Calves',    secondary:[],                               tip:'Bodyweight only but slow and full ROM.'},
+    {name:'Stiff-Leg Deadlift',     met:8.0,equip:'Barbell',    head:'Hamstrings',      session:'A',type:'compound',  difficulty:'intermediate',primary:'Hamstrings',secondary:['Lower Back','Glutes'],          tip:'Knees almost locked. More stretch than RDL.'},
+    {name:'Glute Bridge',           met:5.5,equip:'Bodyweight', head:'Glutes',          session:'A',type:'isolation', difficulty:'beginner',    primary:'Glutes',    secondary:['Hamstrings'],                   tip:'Both feet on floor. Drive hips up.'},
   ],
   'Glutes': [
-    // Session A
-    {name:'Hip Thrust',met:7.0,equip:'Barbell',head:'Glute Max (Main)',session:'A',tip:'Chin tucked. Full hip extension. 2-second squeeze.'},
-    {name:'Sumo Deadlift',met:8.5,equip:'Barbell',head:'Glute Max + Adductors',session:'A',tip:'Wide stance, toes out. Hips hinge, knees track toes.'},
-    {name:'Cable Kickback',met:4.5,equip:'Cable',head:'Glute Max (Isolation)',session:'A',tip:'Slight forward lean. Squeeze at top of kick.'},
-    {name:'Glute Bridge',met:5.5,equip:'Bodyweight',head:'Glute Max',session:'A',tip:'Both feet on floor. Drive hips up. Add weight on hips.'},
-    // Session B
-    {name:'Bulgarian Split Squat',met:8.0,equip:'Dumbbell',head:'Glute Max + Quads',session:'B',tip:'Rear foot on bench. Deep hip flexor stretch.'},
-    {name:'Romanian Deadlift',met:8.0,equip:'Barbell',head:'Glute Max + Hamstrings',session:'B',tip:'Bar down shins. Full hip extension at top.'},
-    {name:'Donkey Kick',met:4.0,equip:'Bodyweight',head:'Glute Max (Isolation)',session:'B',tip:'On hands and knees. Drive heel toward ceiling.'},
-    {name:'Reverse Hyperextension',met:5.5,equip:'Machine',head:'Glute Max + Lower Back',session:'B',tip:'Legs swing up and back. Decompress lumbar spine.'},
-    {name:'Curtsy Lunge',met:6.0,equip:'Dumbbell',head:'Glute Med + Max',session:'B',tip:'Step back and across. Targets glute medius for rounded shape.'},
+    {name:'Hip Thrust',             met:7.0,equip:'Barbell',    head:'Glute Max',       session:'A',type:'compound',  difficulty:'intermediate',primary:'Glutes',    secondary:['Hamstrings'],                   tip:'Chin tucked. Full hip extension. 2-second squeeze.'},
+    {name:'Sumo Deadlift',          met:8.5,equip:'Barbell',    head:'Glutes+Adductors',session:'A',type:'compound',  difficulty:'intermediate',primary:'Glutes',    secondary:['Hamstrings','Adductors'],        tip:'Wide stance, toes out. Hips hinge, knees track toes.'},
+    {name:'Bulgarian Split Squat',  met:8.0,equip:'Dumbbell',   head:'Glutes+Quads',    session:'B',type:'compound',  difficulty:'intermediate',primary:'Glutes',    secondary:['Quads','Hamstrings'],            tip:'Rear foot on bench. Deep hip flexor stretch.'},
+    {name:'Donkey Kick',            met:4.0,equip:'Bodyweight', head:'Glutes (Isolation)',session:'B',type:'isolation',difficulty:'beginner',  primary:'Glutes',    secondary:[],                               tip:'On hands and knees. Drive heel toward ceiling.'},
+    {name:'Curtsy Lunge',           met:6.0,equip:'Dumbbell',   head:'Glute Med+Max',   session:'B',type:'compound',  difficulty:'beginner',    primary:'Glutes',    secondary:['Quads'],                        tip:'Step back and across. Targets glute medius.'},
+    {name:'Reverse Hyperextension', met:5.5,equip:'Machine',    head:'Glutes+Lower Back',session:'B',type:'compound', difficulty:'intermediate',primary:'Glutes',    secondary:['Lower Back','Hamstrings'],       tip:'Legs swing up and back. Decompresses lumbar spine.'},
   ],
   'Hamstrings': [
-    // Session A
-    {name:'Romanian Deadlift',met:8.0,equip:'Barbell',head:'Long Head',session:'A',tip:'Bar slides down shins. Feel full stretch in hamstring.'},
-    {name:'Leg Curl (Machine)',met:5.0,equip:'Machine',head:'Short Head (Isolation)',session:'A',tip:'Prone curl works both heads. Seated curl more long head.'},
-    {name:'Nordic Hamstring Curl',met:6.0,equip:'Bodyweight',head:'Eccentric Strength',session:'A',tip:'Partner holds ankles. Lower as slow as possible. Best injury prevention exercise.'},
-    {name:'Stiff-Leg Deadlift',met:8.0,equip:'Barbell',head:'Long Head',session:'A',tip:'Knees almost locked. Feels more stretch than RDL.'},
-    // Session B
-    {name:'Good Morning',met:6.0,equip:'Barbell',head:'Hamstrings + Lower Back',session:'B',tip:'Bar on upper back. Hinge until parallel.'},
-    {name:'Glute Ham Raise',met:6.5,equip:'Machine',head:'Both Heads',session:'B',tip:'GHR machine. From horizontal, curl body up using hamstrings.'},
-    {name:'Swiss Ball Leg Curl',met:5.5,equip:'Bodyweight',head:'Both Heads + Core',session:'B',tip:'Heels on ball, hips up. Curl ball toward glutes.'},
-    {name:'Single Leg RDL',met:7.5,equip:'Dumbbell',head:'Long Head + Balance',session:'B',tip:'Hip hinge on one leg. Fixes left-right imbalance.'},
+    {name:'Romanian Deadlift',      met:8.0,equip:'Barbell',    head:'Long Head',       session:'A',type:'compound',  difficulty:'intermediate',primary:'Hamstrings',secondary:['Glutes','Lower Back'],          tip:'Bar slides down shins. Feel full hamstring stretch.'},
+    {name:'Leg Curl (Machine)',     met:5.0,equip:'Machine',    head:'Both Heads',      session:'A',type:'isolation', difficulty:'beginner',    primary:'Hamstrings',secondary:[],                              tip:'Prone curl works both heads.'},
+    {name:'Nordic Hamstring Curl',  met:6.0,equip:'Bodyweight', head:'Eccentric Strength',session:'A',type:'compound',difficulty:'advanced',   primary:'Hamstrings',secondary:[],                              tip:'Partner holds ankles. Lower as slow as possible.'},
+    {name:'Good Morning',           met:6.0,equip:'Barbell',    head:'Hamstrings+Lower Back',session:'B',type:'compound',difficulty:'intermediate',primary:'Hamstrings',secondary:['Lower Back'],             tip:'Bar on upper back. Hinge until parallel.'},
+    {name:'Swiss Ball Leg Curl',    met:5.5,equip:'Bodyweight', head:'Both Heads+Core', session:'B',type:'compound',  difficulty:'intermediate',primary:'Hamstrings',secondary:['Core'],                        tip:'Heels on ball, hips up. Curl ball toward glutes.'},
+    {name:'Single Leg RDL',         met:7.5,equip:'Dumbbell',   head:'Long Head+Balance',session:'B',type:'compound', difficulty:'intermediate',primary:'Hamstrings',secondary:['Glutes','Core'],              tip:'Hip hinge on one leg. Fixes left-right imbalance.'},
+    {name:'Glute Ham Raise',        met:6.5,equip:'Machine',    head:'Both Heads',      session:'B',type:'compound',  difficulty:'advanced',    primary:'Hamstrings',secondary:['Glutes'],                      tip:'From horizontal, curl body up using hamstrings only.'},
   ],
   'Calves': [
-    // Session A — Gastrocnemius (upper calf)
-    {name:'Standing Calf Raise',met:4.0,equip:'Machine',head:'Gastrocnemius',session:'A',tip:'Full ROM — deep stretch at bottom, full contraction at top.'},
-    {name:'Donkey Calf Raise',met:4.0,equip:'Machine',head:'Gastrocnemius',session:'A',tip:'Bent-over position = more gastrocnemius stretch.'},
-    {name:'Single-Leg Calf Raise',met:4.0,equip:'Bodyweight',head:'Gastrocnemius',session:'A',tip:'Bodyweight only but slow and full ROM. Handles like 200kg.'},
-    // Session B — Soleus (lower calf)
-    {name:'Seated Calf Raise',met:3.5,equip:'Machine',head:'Soleus (Lower Calf)',session:'B',tip:'Knee bent = soleus. Ignored by most. Builds calf thickness.'},
-    {name:'Calf Press on Leg Press',met:4.0,equip:'Machine',head:'Gastrocnemius',session:'B',tip:'Feet at bottom of platform. Full extension.'},
-    {name:'Tibialis Raise',met:3.0,equip:'Bodyweight',head:'Shin/Tibialis Anterior',session:'B',tip:'Heels on ground, toes up. Balances calf development. Prevents shin splints.'},
+    {name:'Standing Calf Raise',    met:4.0,equip:'Machine',    head:'Gastrocnemius',   session:'A',type:'isolation', difficulty:'beginner',    primary:'Calves',    secondary:[],                               tip:'Full ROM. Deep stretch at bottom.'},
+    {name:'Seated Calf Raise',      met:3.5,equip:'Machine',    head:'Soleus',          session:'B',type:'isolation', difficulty:'beginner',    primary:'Calves',    secondary:[],                               tip:'Knee bent = soleus. Ignored by most.'},
+    {name:'Single-Leg Calf Raise',  met:4.0,equip:'Bodyweight', head:'Gastrocnemius',   session:'A',type:'isolation', difficulty:'beginner',    primary:'Calves',    secondary:[],                               tip:'Bodyweight only but slow and full ROM.'},
+    {name:'Calf Press on Leg Press',met:4.0,equip:'Machine',    head:'Gastrocnemius',   session:'B',type:'isolation', difficulty:'beginner',    primary:'Calves',    secondary:[],                               tip:'Feet at bottom of platform. Full extension.'},
+    {name:'Donkey Calf Raise',      met:4.0,equip:'Machine',    head:'Gastrocnemius',   session:'A',type:'isolation', difficulty:'beginner',    primary:'Calves',    secondary:[],                               tip:'Bent-over position = more gastrocnemius stretch.'},
+    {name:'Tibialis Raise',         met:3.0,equip:'Bodyweight', head:'Tibialis Anterior',session:'B',type:'isolation',difficulty:'beginner',   primary:'Calves',    secondary:[],                               tip:'Heels on ground, toes up. Prevents shin splints.'},
   ],
   'Abs': [
-    // Session A — Upper abs + Core stability
-    {name:'Cable Crunch',met:4.5,equip:'Cable',head:'Upper Abs',session:'A',tip:'Round the spine — pivot at hips is wrong. Pull ribcage to pelvis.'},
-    {name:'Plank',met:4.0,equip:'Bodyweight',head:'Core Stability',session:'A',tip:'Neutral spine. Squeeze everything. 30-60s.'},
-    {name:'Ab Rollout',met:5.5,equip:'Equipment',head:'Upper Abs + Core',session:'A',tip:'Most effective ab exercise. Control the lowering. Avoid hyperextending.'},
-    {name:'Decline Crunch',met:4.0,equip:'Bodyweight',head:'Upper Abs',session:'A',tip:'Bench at 30-45°. Hands behind head. Full ROM.'},
-    {name:'Dead Bug',met:4.0,equip:'Bodyweight',head:'Deep Core',session:'A',tip:'Lower back stays on floor. Opposite arm and leg extend slowly.'},
-    // Session B — Lower abs + Obliques
-    {name:'Hanging Leg Raise',met:5.0,equip:'Bodyweight',head:'Lower Abs',session:'B',tip:'Posterior pelvic tilt at top. No swinging.'},
-    {name:'Leg Raise',met:4.5,equip:'Bodyweight',head:'Lower Abs',session:'B',tip:'On floor or bench. Slow lowering phase.'},
-    {name:'Russian Twist',met:4.5,equip:'Bodyweight',head:'Obliques',session:'B',tip:'Feet off floor. Rotate fully. Add weight for progression.'},
-    {name:'Bicycle Crunch',met:4.5,equip:'Bodyweight',head:'Obliques + Upper Abs',session:'B',tip:'Elbow to opposite knee. Slow. Avoid neck strain.'},
-    {name:'Side Plank',met:3.5,equip:'Bodyweight',head:'Obliques',session:'B',tip:'Elbow or hand. Body straight. 30-45s each side.'},
-    // Always available
-    {name:'Crunch',met:3.5,equip:'Bodyweight',head:'Upper Abs',session:'A',tip:'Hands at temples. Curl ribs to pelvis. Short ROM.'},
-    {name:'Mountain Climber',met:6.0,equip:'Bodyweight',head:'Core + Cardio',session:'A',tip:'Drive knees to chest alternately. Core braced throughout.'},
-    {name:'Dragon Flag',met:6.0,equip:'Bodyweight',head:'Full Core (Advanced)',session:'B',tip:'Grip bench. Full body lowering with back straight. Rocky favourite move.'},
+    {name:'Cable Crunch',           met:4.5,equip:'Cable',      head:'Upper Abs',       session:'A',type:'isolation', difficulty:'beginner',    primary:'Abs',       secondary:[],                               tip:'Round the spine. Pull ribcage to pelvis.'},
+    {name:'Plank',                  met:4.0,equip:'Bodyweight', head:'Core Stability',  session:'A',type:'isolation', difficulty:'beginner',    primary:'Abs',       secondary:['Glutes','Shoulders'],           tip:'Neutral spine. Squeeze everything. 30-60s.'},
+    {name:'Ab Rollout',             met:5.5,equip:'Equipment',  head:'Upper Abs+Core',  session:'A',type:'isolation', difficulty:'intermediate',primary:'Abs',       secondary:['Shoulders'],                    tip:'Most effective ab exercise. Control the lowering.'},
+    {name:'Hanging Leg Raise',      met:5.0,equip:'Bodyweight', head:'Lower Abs',       session:'B',type:'isolation', difficulty:'intermediate',primary:'Abs',       secondary:['Hip Flexors'],                  tip:'Posterior pelvic tilt at top. No swinging.'},
+    {name:'Leg Raise',              met:4.5,equip:'Bodyweight', head:'Lower Abs',       session:'B',type:'isolation', difficulty:'beginner',    primary:'Abs',       secondary:['Hip Flexors'],                  tip:'On floor or bench. Slow lowering phase.'},
+    {name:'Russian Twist',          met:4.5,equip:'Bodyweight', head:'Obliques',        session:'B',type:'isolation', difficulty:'beginner',    primary:'Abs',       secondary:[],                               tip:'Feet off floor. Rotate fully. Add weight for progression.'},
+    {name:'Bicycle Crunch',         met:4.5,equip:'Bodyweight', head:'Obliques+Upper',  session:'B',type:'isolation', difficulty:'beginner',    primary:'Abs',       secondary:[],                               tip:'Elbow to opposite knee. Slow. Avoid neck strain.'},
+    {name:'Side Plank',             met:3.5,equip:'Bodyweight', head:'Obliques',        session:'B',type:'isolation', difficulty:'beginner',    primary:'Abs',       secondary:[],                               tip:'Elbow or hand. Body straight. 30-45s each side.'},
+    {name:'Dragon Flag',            met:6.0,equip:'Bodyweight', head:'Full Core',       session:'B',type:'isolation', difficulty:'advanced',    primary:'Abs',       secondary:['Shoulders'],                    tip:'Grip bench. Full body lowering with back straight.'},
+    {name:'Dead Bug',               met:4.0,equip:'Bodyweight', head:'Deep Core',       session:'A',type:'isolation', difficulty:'beginner',    primary:'Abs',       secondary:[],                               tip:'Lower back stays on floor. Opposite arm and leg extend.'},
+    {name:'Mountain Climber',       met:6.0,equip:'Bodyweight', head:'Core+Cardio',     session:'A',type:'isolation', difficulty:'beginner',    primary:'Abs',       secondary:['Shoulders'],                    tip:'Drive knees to chest alternately. Core braced.'},
+    {name:'Decline Crunch',         met:4.0,equip:'Bodyweight', head:'Upper Abs',       session:'A',type:'isolation', difficulty:'beginner',    primary:'Abs',       secondary:[],                               tip:'Bench at 30-45 degrees. Full ROM.'},
   ],
   'Cardio': [
-    {name:'Treadmill Run',met:9.8,equip:'Machine',head:'Aerobic',session:'A',tip:'Slight forward lean. Land midfoot.'},
-    {name:'Stationary Bike',met:8.0,equip:'Machine',head:'Low Impact Aerobic',session:'A',tip:'Adjust seat so knee is slightly bent at bottom.'},
-    {name:'Rowing Machine',met:8.0,equip:'Machine',head:'Full Body Aerobic',session:'B',tip:'60% legs, 20% core, 20% arms. Drive with legs first.'},
-    {name:'Jump Rope',met:10.0,equip:'Equipment',head:'Coordination + Aerobic',session:'A',tip:'Land on balls of feet. Wrists do the work, not arms.'},
-    {name:'Elliptical',met:7.5,equip:'Machine',head:'Low Impact Aerobic',session:'B',tip:'Engage arms. Keep upright posture.'},
-    {name:'Stairmaster',met:9.0,equip:'Machine',head:'Glutes + Aerobic',session:'B',tip:'Keep upright. No leaning on rails. Full step down.'},
-    {name:'Battle Ropes',met:10.0,equip:'Equipment',head:'Full Body HIIT',session:'A',tip:'Alternate waves. Keep core tight. 20-30s rounds.'},
-    {name:'Burpee',met:10.0,equip:'Bodyweight',head:'Full Body HIIT',session:'A',tip:'Chest touches floor. Full jump at top.'},
-    {name:'Box Jump',met:9.0,equip:'Bodyweight',head:'Explosive Power',session:'B',tip:'Soft landing. Step down — never jump down.'},
-    {name:'Assault Bike',met:12.0,equip:'Machine',head:'Full Body HIIT',session:'A',tip:'The devil tricycle. 20s all-out, 40s rest x 10.'},
-    {name:'Sled Push',met:11.0,equip:'Equipment',head:'Legs + Conditioning',session:'B',tip:'Low angle, drive with legs. No momentum.'},
-    {name:'Farmer Walk',met:8.5,equip:'Dumbbell',head:'Full Body + Grip',session:'A',tip:'Heavy dumbbells or trap bar. Walk as far as possible. Builds crushing grip and full body strength.'},
-    {name:'Yoke Walk',met:10.0,equip:'Equipment',head:'Full Body + Core',session:'B',tip:'Bar across shoulders, walk. Most demanding exercise for spinal stability per Stuart McGill research.'},
-    {name:'Zercher Carry',met:9.0,equip:'Barbell',head:'Core + Quads',session:'B',tip:'Bar in crook of elbows, walk forward. Brutal core challenge.'},
+    {name:'Treadmill Run',          met:9.8,equip:'Machine',    head:'Aerobic',         session:'A',type:'cardio',    difficulty:'beginner',    primary:'Cardio',    secondary:[],                               tip:'Slight forward lean. Land midfoot.'},
+    {name:'Stationary Bike',        met:8.0,equip:'Machine',    head:'Low Impact',      session:'A',type:'cardio',    difficulty:'beginner',    primary:'Cardio',    secondary:[],                               tip:'Adjust seat so knee slightly bent at bottom.'},
+    {name:'Rowing Machine',         met:8.0,equip:'Machine',    head:'Full Body',       session:'B',type:'cardio',    difficulty:'beginner',    primary:'Cardio',    secondary:['Back','Core'],                  tip:'60% legs, 20% core, 20% arms. Drive with legs first.'},
+    {name:'Jump Rope',              met:10.0,equip:'Equipment', head:'Coordination',    session:'A',type:'cardio',    difficulty:'beginner',    primary:'Cardio',    secondary:[],                               tip:'Land on balls of feet. Wrists do the work.'},
+    {name:'Battle Ropes',           met:10.0,equip:'Equipment', head:'Full Body HIIT',  session:'A',type:'cardio',    difficulty:'beginner',    primary:'Cardio',    secondary:['Shoulders','Core'],             tip:'Alternate waves. Keep core tight. 20-30s rounds.'},
+    {name:'Burpee',                 met:10.0,equip:'Bodyweight',head:'Full Body HIIT',  session:'A',type:'cardio',    difficulty:'intermediate',primary:'Cardio',    secondary:[],                               tip:'Chest touches floor. Full jump at top.'},
+    {name:'Box Jump',               met:9.0,equip:'Bodyweight', head:'Explosive Power', session:'B',type:'cardio',    difficulty:'intermediate',primary:'Cardio',    secondary:['Legs'],                         tip:'Soft landing. Step down, do not jump down.'},
+    {name:'Assault Bike',           met:12.0,equip:'Machine',   head:'Full Body HIIT',  session:'A',type:'cardio',    difficulty:'intermediate',primary:'Cardio',    secondary:[],                               tip:'The devil tricycle. 20s all-out, 40s rest x 10.'},
+    {name:'Sled Push',              met:11.0,equip:'Equipment', head:'Legs+Conditioning',session:'B',type:'cardio',   difficulty:'intermediate',primary:'Cardio',    secondary:['Legs'],                         tip:'Low angle, drive with legs. No momentum.'},
+    {name:'Farmer Walk',            met:8.5,equip:'Dumbbell',   head:'Full Body+Grip',  session:'A',type:'cardio',    difficulty:'beginner',    primary:'Cardio',    secondary:['Forearms','Core'],              tip:'Heavy dumbbells. Walk as far as possible.'},
+    {name:'Yoke Walk',              met:10.0,equip:'Equipment', head:'Full Body+Core',  session:'B',type:'cardio',    difficulty:'advanced',    primary:'Cardio',    secondary:['Core','Legs'],                  tip:'Bar across shoulders, walk. Most demanding for spinal stability.'},
   ],
   'Forearms': [
-    {name:'Wrist Curl',met:3.0,equip:'Barbell',head:'Flexors',session:'A',tip:'Forearm on bench. Full ROM wrist flexion.'},
-    {name:'Reverse Wrist Curl',met:3.0,equip:'Barbell',head:'Extensors',session:'B',tip:'Pronated grip. Works the extensors (top of forearm).'},
-    {name:'Farmer Walk',met:6.5,equip:'Dumbbell',head:'Grip + Forearms',session:'A',tip:'Heavy. Walk as far as you can. Builds crushing grip.'},
-    {name:'Dead Hang',met:3.5,equip:'Bodyweight',head:'Grip Endurance',session:'B',tip:'Hang from bar as long as possible. Decompresses spine too.'},
-    {name:'Plate Pinch',met:3.5,equip:'Plates',head:'Pinch Grip',session:'A',tip:'Two plates smooth sides out. Pinch and hold.'},
-    {name:'Zottman Curl',met:4.5,equip:'Dumbbell',head:'Brachioradialis + Grip',session:'B',tip:'The rotation also taxes the forearms on the eccentric.'},
+    {name:'Wrist Curl',             met:3.0,equip:'Barbell',    head:'Flexors',         session:'A',type:'isolation', difficulty:'beginner',    primary:'Forearms',  secondary:[],                               tip:'Forearm on bench. Full ROM wrist flexion.'},
+    {name:'Reverse Wrist Curl',     met:3.0,equip:'Barbell',    head:'Extensors',       session:'B',type:'isolation', difficulty:'beginner',    primary:'Forearms',  secondary:[],                               tip:'Pronated grip. Works the extensors (top of forearm).'},
+    {name:'Farmer Walk',            met:6.5,equip:'Dumbbell',   head:'Grip+Forearms',   session:'A',type:'compound',  difficulty:'beginner',    primary:'Forearms',  secondary:['Core'],                         tip:'Heavy. Walk as far as you can. Builds crushing grip.'},
+    {name:'Dead Hang',              met:3.5,equip:'Bodyweight', head:'Grip Endurance',  session:'B',type:'isolation', difficulty:'beginner',    primary:'Forearms',  secondary:[],                               tip:'Hang from bar as long as possible.'},
+    {name:'Plate Pinch',            met:3.5,equip:'Plates',     head:'Pinch Grip',      session:'A',type:'isolation', difficulty:'beginner',    primary:'Forearms',  secondary:[],                               tip:'Two plates smooth sides out. Pinch and hold.'},
+    {name:'Zottman Curl',           met:4.5,equip:'Dumbbell',   head:'Brachioradialis', session:'B',type:'isolation', difficulty:'intermediate',primary:'Forearms',  secondary:['Biceps'],                       tip:'The rotation also taxes the forearms on the eccentric.'},
   ],
 };
-
 // Session rotation tracking — which session (A or B) each muscle was last trained
 // Stored in state.sessionRotation = {Chest: 'A', Biceps: 'B', ...}
 function getNextSession(muscle) {
@@ -2984,15 +3035,6 @@ function recordSessionDone(muscle, session) {
 }
 
 // Guided split recommendation engine
-const SPLIT_DAYS = {
-  Push: ['Chest', 'Shoulders', 'Triceps'],
-  Pull: ['Back', 'Biceps', 'Forearms'],
-  Legs: ['Legs', 'Glutes', 'Hamstrings', 'Calves'],
-  Upper: ['Chest', 'Back', 'Shoulders', 'Biceps', 'Triceps'],
-  Lower: ['Legs', 'Glutes', 'Hamstrings', 'Calves', 'Abs'],
-  Core:  ['Abs', 'Cardio'],
-};
-
 function getGuidedSplitRecommendation() {
   const history = state.workoutHistory || [];
   const today = todayStr();
@@ -6150,23 +6192,307 @@ function addCustomFood(){
   if(!isPublic) toast('"'+name+'" saved! '+kcal+' kcal · P:'+protein+'g C:'+carbs+'g Fat:'+fat+'g Fibre:'+fibre+'g');
 }
 
-// ─── SMART WORKOUT SUGGESTER ──────────────────────────────────────────────────
-const MUSCLE_GROUPS_SS = ['Chest','Back','Shoulders','Biceps','Triceps','Legs','Glutes','Hamstrings','Calves','Abs','Cardio','Forearms'];
-const MUSCLE_EMOJIS_SS = {Chest:'🏋️',Back:'🔙',Shoulders:'🔺',Biceps:'💪',Triceps:'🔩',Legs:'🦵',Glutes:'🍑',Hamstrings:'🦿',Calves:'🦶',Abs:'⚡',Cardio:'🏃',Forearms:'✊'};
+// ─── SMART WORKOUT GENERATOR ─────────────────────────────────────────────────
 
+// SPLIT DEFINITIONS — exact muscle coverage requirements
+const SPLIT_DAYS = {
+  Push:  ['Chest','Shoulders','Triceps'],
+  Pull:  ['Back','Biceps','Rear Delts'],
+  Legs:  ['Legs','Hamstrings','Glutes','Calves'],
+  Upper: ['Chest','Back','Shoulders','Biceps','Triceps'],
+  Lower: ['Legs','Hamstrings','Glutes','Calves','Abs'],
+  Core:  ['Abs','Cardio'],
+};
+
+// Muscle coverage requirements per split
+const SPLIT_REQUIREMENTS = {
+  Push:  {Chest:2, Shoulders:2, Triceps:2},
+  Pull:  {Back:3, Biceps:2, 'Rear Delts':1},
+  Legs:  {Legs:2, Hamstrings:2, Glutes:1, Calves:1},
+  Upper: {Chest:2, Back:2, Shoulders:1, Biceps:1, Triceps:1},
+  Lower: {Legs:2, Hamstrings:2, Glutes:1, Calves:1, Abs:1},
+  Core:  {Abs:3, Cardio:1},
+};
+
+// Sets/reps by type
+const SETS_REPS = {
+  compound: {sets:4, repsMin:6,  repsMax:10},
+  isolation:{sets:3, repsMin:10, repsMax:15},
+  cardio:   {sets:1, repsMin:10, repsMax:20},
+};
+
+// Anchor lifts — always repeat for progressive overload tracking
+const ANCHOR_LIFTS = {
+  Push: ['Barbell Bench Press','Overhead Press (Barbell)','Incline Barbell Press'],
+  Pull: ['Deadlift','Barbell Row','Pull-Up'],
+  Legs: ['Barbell Squat','Romanian Deadlift','Hip Thrust'],
+  Upper:['Barbell Bench Press','Barbell Row','Overhead Press (Barbell)'],
+  Lower:['Barbell Squat','Romanian Deadlift','Hip Thrust'],
+  Core: ['Ab Rollout','Cable Crunch'],
+};
+
+// ── Fatigue tracking ────────────────────────────────────────────────────────
+function getMuscleLastTrained(muscle) {
+  const history = state.workoutHistory || [];
+  for(let i = history.length-1; i >= 0; i--) {
+    if(history[i].exercises.some(e =>
+      e.muscle === muscle ||
+      (EXERCISE_DB[muscle]||[]).some(db => db.name === e.name)
+    )) return history[i].date;
+  }
+  return null;
+}
+
+function getMuscleHoursSinceTraining(muscle) {
+  const lastDate = getMuscleLastTrained(muscle);
+  if(!lastDate) return 999;
+  const diffMs = new Date() - new Date(lastDate + 'T00:00:00');
+  return diffMs / 3600000;
+}
+
+function isMuscleRecovered(muscle) {
+  return getMuscleHoursSinceTraining(muscle) >= 48;
+}
+
+// ── Exercise history tracking (last 7 workouts) ────────────────────────────
+function getRecentExerciseHistory(n = 7) {
+  const history = state.workoutHistory || [];
+  const recent = history.slice(-n);
+  const usedBySession = {}; // exerciseName → [session indices it appeared in]
+  recent.forEach((w, idx) => {
+    w.exercises.forEach(e => {
+      if(!usedBySession[e.name]) usedBySession[e.name] = [];
+      usedBySession[e.name].push(idx);
+    });
+  });
+  return { sessions: recent, usedBySession };
+}
+
+// ── Get last performance for progressive overload ──────────────────────────
+function getLastPerformance(exName) {
+  const history = state.workoutHistory || [];
+  for(let i = history.length-1; i >= 0; i--) {
+    const ex = history[i].exercises.find(e => e.name.toUpperCase() === exName.toUpperCase());
+    if(ex && ex.sets && ex.sets.length > 0) {
+      const lastSet = ex.sets[ex.sets.length-1];
+      return { weight: lastSet.w||0, reps: lastSet.r||0, date: history[i].date };
+    }
+  }
+  return null;
+}
+
+// ── Core workout generator ─────────────────────────────────────────────────
+function generateWorkout(splitName) {
+  const requirements = SPLIT_REQUIREMENTS[splitName] || {};
+  const anchors = ANCHOR_LIFTS[splitName] || [];
+  const { usedBySession } = getRecentExerciseHistory(7);
+  const today = todayStr();
+  const result = []; // final exercise list
+
+  // Track how many exercises per muscle group we've added
+  const muscleCount = {};
+
+  // Helper: score an exercise for selection
+  function scoreExercise(ex, muscle) {
+    let score = 0;
+    const name = ex.name;
+    const lastUsedSessions = usedBySession[name] || [];
+    const sessionCount = (state.exerciseMemory||{})[name.toUpperCase()]?.count || 0;
+
+    // Familiarity score — 60% familiar preference
+    if(sessionCount > 0) score += 20; // used before
+    if(sessionCount > 3) score += 10; // well-practiced
+
+    // Variety score — prefer not used in last 3 sessions
+    const lastUsed = lastUsedSessions.length > 0 ? Math.max(...lastUsedSessions) : -99;
+    const sessionsAgo = 6 - lastUsed; // 0 = used this session, 6 = used 7 sessions ago
+    if(sessionsAgo >= 3) score += 25; // not recently used = good for variety
+    else if(sessionsAgo < 2) score -= 20; // just used = deprioritize
+
+    // Anchor lift bonus
+    if(anchors.includes(name)) score += 30;
+
+    // Compound priority
+    if(ex.type === 'compound') score += 15;
+
+    // Difficulty preference (match to user history)
+    const avgSessions = Object.values(state.exerciseMemory||{}).reduce((a,v)=>a+(v.count||0),0) / Math.max(1, Object.keys(state.exerciseMemory||{}).length);
+    if(avgSessions > 20 && ex.difficulty === 'advanced') score += 5;
+    else if(avgSessions > 5 && ex.difficulty === 'intermediate') score += 5;
+    else if(ex.difficulty === 'beginner') score += 3;
+
+    // Add small random variation (40% new exercise rotation)
+    score += Math.random() * 10;
+
+    return score;
+  }
+
+  // Helper: build sets for an exercise with progressive overload
+  function buildSets(ex) {
+    const typeKey = ex.type || 'isolation';
+    const config = SETS_REPS[typeKey] || SETS_REPS.isolation;
+    const lastPerf = getLastPerformance(ex.name);
+
+    let weight = 0;
+    let reps = Math.round((config.repsMin + config.repsMax) / 2);
+
+    if(lastPerf) {
+      weight = lastPerf.weight;
+      reps = lastPerf.reps;
+      // Progressive overload: +2.5kg every 2 sessions or +1 rep
+      const sessionCount = (state.exerciseMemory||{})[ex.name.toUpperCase()]?.count || 0;
+      if(sessionCount > 0 && sessionCount % 2 === 0) {
+        // Suggest weight increase
+        weight = Math.round((weight + 2.5) * 2) / 2;
+      } else if(reps < config.repsMax) {
+        reps = Math.min(reps + 1, config.repsMax);
+      }
+    }
+
+    const sets = [];
+    for(let i = 0; i < config.sets; i++) {
+      sets.push({ w: weight, r: reps, done: false });
+    }
+    return sets;
+  }
+
+  // Phase 1: Add anchor lifts first (always repeat for progressive overload)
+  anchors.forEach(anchorName => {
+    if(result.length >= 2) return; // max 2 anchors
+    // Find which muscle group this anchor belongs to
+    let anchorEx = null, anchorMuscle = null;
+    for(const [m, exList] of Object.entries(EXERCISE_DB)) {
+      const found = exList.find(e => e.name === anchorName);
+      if(found && requirements[m]) {
+        anchorEx = found;
+        anchorMuscle = m;
+        break;
+      }
+    }
+    if(!anchorEx || !anchorMuscle) return;
+    if((muscleCount[anchorMuscle]||0) >= (requirements[anchorMuscle]||0)) return;
+    result.push({
+      exercise: anchorEx, muscle: anchorMuscle,
+      isAnchor: true, sets: buildSets(anchorEx)
+    });
+    muscleCount[anchorMuscle] = (muscleCount[anchorMuscle]||0) + 1;
+  });
+
+  // Phase 2: Fill remaining requirements per muscle
+  for(const [muscle, needed] of Object.entries(requirements)) {
+    const current = muscleCount[muscle] || 0;
+    const remaining = needed - current;
+    if(remaining <= 0) continue;
+
+    // Resolve muscle name — Back may need Rear Delts for Pull day
+    let dbKey = muscle;
+    if(muscle === 'Rear Delts') dbKey = 'Shoulders';
+
+    const available = (EXERCISE_DB[dbKey] || [])
+      .filter(ex => {
+        // For Rear Delts: only rear delt exercises
+        if(muscle === 'Rear Delts') {
+          return ex.head && ex.head.toLowerCase().includes('rear');
+        }
+        // Don't add same exercise twice
+        return !result.some(r => r.exercise.name === ex.name);
+      })
+      .map(ex => ({ ex, score: scoreExercise(ex, muscle) }))
+      .sort((a,b) => b.score - a.score);
+
+    // Separate compounds and isolations
+    const compounds = available.filter(e => e.ex.type === 'compound');
+    const isolations = available.filter(e => e.ex.type !== 'compound');
+
+    // Pick: first prefer compounds (up to needed), then isolation
+    let picked = 0;
+    for(const { ex } of [...compounds, ...isolations]) {
+      if(picked >= remaining) break;
+      if(result.some(r => r.exercise.name === ex.name)) continue;
+      result.push({
+        exercise: ex, muscle,
+        isAnchor: false, sets: buildSets(ex)
+      });
+      muscleCount[muscle] = (muscleCount[muscle]||0) + 1;
+      picked++;
+    }
+  }
+
+  // Phase 3: Sort — compounds first, then by muscle group
+  const muscleOrder = Object.keys(requirements);
+  result.sort((a, b) => {
+    // Anchors always first
+    if(a.isAnchor && !b.isAnchor) return -1;
+    if(!a.isAnchor && b.isAnchor) return 1;
+    // Then by type: compounds before isolations
+    if(a.exercise.type === 'compound' && b.exercise.type !== 'compound') return -1;
+    if(a.exercise.type !== 'compound' && b.exercise.type === 'compound') return 1;
+    // Then by muscle group order
+    return muscleOrder.indexOf(a.muscle) - muscleOrder.indexOf(b.muscle);
+  });
+
+  return result;
+}
+
+// ── Modal state ─────────────────────────────────────────────────────────────
 let _ssMode = 'guided';
+let _ssSelected = new Set();
+let _ssSuggestions = [];
 let _ssSessionInfo = '';
+let _currentSplitName = '';
+
+function openSmartSuggest(){
+  _ssSelected = new Set();
+  _ssSuggestions = [];
+  _ssMode = 'guided';
+  _currentSplitName = '';
+  document.getElementById('smart-suggest-modal').style.display='flex';
+  showStep1();
+  setSSMode('guided');
+  const rec = getGuidedSplitRecommendation();
+  const recDiv = document.getElementById('ss-guided-recommendation');
+  if(recDiv){
+    const muscles = SPLIT_DAYS[rec.recommended]||[];
+    const req = SPLIT_REQUIREMENTS[rec.recommended]||{};
+    const totalEx = Object.values(req).reduce((a,b)=>a+b,0);
+    const overdueStr = rec.overdueMuscles.length
+      ?`<div style="margin-top:5px;font-size:11px;color:#f97316">⚠ Overdue: ${rec.overdueMuscles.join(', ')}</div>`:'';
+    const thisWeekStr = rec.splitsThisWeek.length
+      ?`<div style="margin-top:4px;font-size:11px;color:var(--text3)">This week: ${rec.splitsThisWeek.map(s=>'✓ '+s).join(' · ')}</div>`
+      :`<div style="margin-top:4px;font-size:11px;color:var(--text3)">Nothing trained yet this week (starts Monday)</div>`;
+    const restStr = rec.suggestRest
+      ?`<div style="margin-top:5px;font-size:11px;color:#22c55e">💤 Already trained today — rest is progress too</div>`:'';
+    recDiv.innerHTML=`
+      <div style="font-size:11px;color:var(--text3);margin-bottom:3px">Recommended today:</div>
+      <div style="font-family:var(--font-cond);font-weight:900;font-size:22px;color:var(--red)">${rec.recommended.toUpperCase()} DAY</div>
+      <div style="font-size:12px;color:var(--text2);margin-top:2px">${muscles.join(' · ')}</div>
+      <div style="font-size:11px;color:var(--text3);margin-top:2px">~${totalEx} exercises · 2 compounds first</div>
+      ${rec.lastSplit?`<div style="font-size:11px;color:var(--text3);margin-top:3px">Last session: ${rec.lastSplit}</div>`:''}
+      ${thisWeekStr}${overdueStr}${restStr}
+      <button onclick="selectAndGenerateSplit('${rec.recommended}')" class="btn-primary" style="width:100%;margin-top:10px;font-size:14px;padding:10px">
+        ✓ Generate ${rec.recommended} Day Workout
+      </button>`;
+  }
+  const genBtn=document.getElementById('ss-generate-btn');
+  if(genBtn){genBtn.disabled=false;genBtn.style.opacity='1';}
+}
+
+function closeSmartSuggest(){
+  document.getElementById('smart-suggest-modal').style.display='none';
+}
+function showStep1(){
+  document.getElementById('ss-step1').style.display='block';
+  document.getElementById('ss-step2').style.display='none';
+}
 
 function setSSMode(mode){
-  _ssMode = mode;
-  document.getElementById('ss-guided-content').style.display = mode==='guided'?'block':'none';
-  document.getElementById('ss-free-content').style.display = mode==='free'?'block':'none';
-  document.getElementById('ss-mode-guided').style.background = mode==='guided'?'var(--red)':'var(--surface2)';
-  document.getElementById('ss-mode-guided').style.color = mode==='guided'?'#fff':'var(--text2)';
-  document.getElementById('ss-mode-guided').style.borderColor = mode==='guided'?'var(--red)':'var(--border)';
-  document.getElementById('ss-mode-free').style.background = mode==='free'?'var(--red)':'var(--surface2)';
-  document.getElementById('ss-mode-free').style.color = mode==='free'?'#fff':'var(--text2)';
-  document.getElementById('ss-mode-free').style.borderColor = mode==='free'?'var(--red)':'var(--border)';
+  _ssMode=mode;
+  document.getElementById('ss-guided-content').style.display=mode==='guided'?'block':'none';
+  document.getElementById('ss-free-content').style.display=mode==='free'?'block':'none';
+  const g=document.getElementById('ss-mode-guided');
+  const f=document.getElementById('ss-mode-free');
+  if(g){g.style.background=mode==='guided'?'var(--red)':'var(--surface2)';g.style.color=mode==='guided'?'#fff':'var(--text2)';g.style.borderColor=mode==='guided'?'var(--red)':'var(--border)';}
+  if(f){f.style.background=mode==='free'?'var(--red)':'var(--surface2)';f.style.color=mode==='free'?'#fff':'var(--text2)';f.style.borderColor=mode==='free'?'var(--red)':'var(--border)';}
   if(mode==='free'){
     renderMuscleChipsSS();
     const genBtn=document.getElementById('ss-generate-btn');
@@ -6175,164 +6501,11 @@ function setSSMode(mode){
   }
 }
 
-
-function selectGuidedSplit(splitName){
-  const muscles = SPLIT_DAYS[splitName]||[];
-  _ssSelected = new Set(muscles.filter(m => EXERCISE_DB[m]));
-  // Highlight split buttons
-  document.querySelectorAll('.ss-split-btn').forEach(b=>{
-    const isThis = b.textContent.toLowerCase().includes(splitName.toLowerCase());
-    b.style.background = isThis?'var(--red)':'var(--surface2)';
-    b.style.color = isThis?'#fff':'var(--text2)';
-    b.style.borderColor = isThis?'var(--red)':'var(--border)';
-  });
-  const genBtn=document.getElementById('ss-generate-btn');
-  genBtn.disabled=false;
-  genBtn.style.opacity='1';
-  genBtn.textContent=`Train ${splitName} Day (${muscles.length} muscles) →`;
-}
-
-function openSmartSuggest(){
-  _ssSelected = new Set();
-  _ssSuggestions = [];
-  _ssMode = 'guided';
-  document.getElementById('smart-suggest-modal').style.display='flex';
-  showStep1();
-  setSSMode('guided');
-  // Render guided recommendation
-  const rec = getGuidedSplitRecommendation();
-  const recDiv = document.getElementById('ss-guided-recommendation');
-  if(recDiv){
-    const muscles = SPLIT_DAYS[rec.recommended]||[];
-    const overdueStr = rec.overdueMuscles.length
-      ? `<div style="margin-top:5px;font-size:11px;color:#f97316">⚠ Overdue: ${rec.overdueMuscles.join(', ')}</div>`:'';
-    // Show what's been done this week
-    const thisWeekStr = rec.splitsThisWeek.length
-      ? `<div style="margin-top:4px;font-size:11px;color:var(--text3)">This week: ${rec.splitsThisWeek.map(s=>'✓ '+s).join(' · ')}</div>`
-      : `<div style="margin-top:4px;font-size:11px;color:var(--text3)">Nothing trained yet this week</div>`;
-    const restStr = rec.suggestRest
-      ? `<div style="margin-top:5px;font-size:11px;color:#22c55e">💤 You already trained today — rest is also progress</div>`:'';
-    recDiv.innerHTML=`
-      <div style="font-size:11px;color:var(--text3);margin-bottom:3px">Recommended today:</div>
-      <div style="font-family:var(--font-cond);font-weight:900;font-size:22px;color:var(--red)">${rec.recommended.toUpperCase()} DAY</div>
-      <div style="font-size:12px;color:var(--text2);margin-top:2px">${muscles.join(' · ')}</div>
-      ${rec.lastSplit?`<div style="font-size:11px;color:var(--text3);margin-top:3px">Last session: ${rec.lastSplit}</div>`:''}
-      ${thisWeekStr}
-      ${overdueStr}
-      ${restStr}
-      <button onclick="selectGuidedSplit('${rec.recommended}')" class="btn-primary" style="width:100%;margin-top:10px;font-size:14px;padding:10px">
-        ✓ Train ${rec.recommended} Day
-      </button>`;
-  }
-  const genBtn=document.getElementById('ss-generate-btn');
-  genBtn.disabled=false;
-  genBtn.style.opacity='1';
-}
-
-// Record session done when exercises are added
-function addAllSuggested(){
-  const toAdd=_ssSuggestions.filter(p=>p.selected);
-  if(!toAdd.length){toast('Select at least one exercise');return;}
-  // Record which session (A or B) was done for each muscle
-  const musclesSessions = {};
-  toAdd.forEach(p=>{
-    if(!musclesSessions[p.muscle]) musclesSessions[p.muscle]=p.exercise.session||'A';
-  });
-  Object.entries(musclesSessions).forEach(([muscle,sess])=>recordSessionDone(muscle,sess));
-
-  toAdd.forEach(p=>{
-    if(state.exercises.some(e=>e.name.toUpperCase()===p.exercise.name.toUpperCase())) return;
-    const sets=p.lastWeight>0
-      ?[{w:p.lastWeight,r:p.lastReps||8,done:false},{w:p.lastWeight,r:p.lastReps||8,done:false},{w:p.lastWeight,r:p.lastReps||8,done:false}]
-      :[{w:0,r:10,done:false},{w:0,r:10,done:false},{w:0,r:10,done:false}];
-    state.exercises.push({
-      name:p.exercise.name, muscle:p.muscle,
-      met:p.exercise.met||5, sets,
-      tip:p.exercise.tip||'', head:p.exercise.head||''
-    });
-    state.expanded[state.exercises.length-1]=true;
-    learnExercise(p.exercise.name.toUpperCase(),p.muscle,p.exercise.met||5);
-  });
-  saveState({activeSession:true,memory:true});
-  closeSmartSuggest();
-  renderExercises();
-  const bar=document.getElementById('smart-suggest-bar');
-  if(bar) bar.style.display='none';
-  // Show weekly coverage after adding
-  setTimeout(renderWeeklyCoverage, 500);
-  toast('Added '+toAdd.length+' exercise'+(toAdd.length>1?'s':'')+' — let\'s go! 💪');
-}
-
-// ── Weekly muscle coverage tracker ───────────────────────────────────────────
-function renderWeeklyCoverage(){
-  let el = document.getElementById('weekly-coverage-bar');
-  if(!el){
-    el = document.createElement('div');
-    el.id = 'weekly-coverage-bar';
-    el.style.cssText = 'padding:10px 16px;background:var(--surface2);border-radius:12px;margin:10px 0';
-    const container = document.getElementById('ex-container');
-    if(container) container.parentNode.insertBefore(el, container);
-  }
-  // Monday-based week start
-  const today = new Date();
-  const dow = (today.getDay() + 6) % 7; // 0=Mon...6=Sun
-  const weekStart = new Date(today);
-  weekStart.setDate(today.getDate() - dow);
-  const weekStartStr = weekStart.toISOString().slice(0,10);
-
-  const majorMuscles = ['Chest','Back','Shoulders','Biceps','Triceps','Legs','Glutes','Abs'];
-  const trainedThisWeek = {};
-  (state.workoutHistory||[]).filter(w=>w.date>=weekStartStr).forEach(w=>{
-    w.exercises.forEach(e=>{
-      if(!trainedThisWeek[e.muscle]) trainedThisWeek[e.muscle]=0;
-      trainedThisWeek[e.muscle]++;
-    });
-  });
-
-  // Days of week labels (Mon–Sun)
-  const dayLabels=['Mon','Tue','Wed','Thu','Fri','Sat','Sun'];
-  const trainedDays = new Set(
-    (state.workoutHistory||[]).filter(w=>w.date>=weekStartStr).map(w=>w.date)
-  );
-  const dayDots = dayLabels.map((label,i)=>{
-    const d = new Date(weekStart);
-    d.setDate(weekStart.getDate()+i);
-    const ds = d.toISOString().slice(0,10);
-    const isToday = ds===todayStr();
-    const trained = trainedDays.has(ds);
-    return `<div style="text-align:center;flex:1">
-      <div style="width:8px;height:8px;border-radius:50%;margin:0 auto 2px;background:${trained?'var(--red)':isToday?'var(--border)':'transparent'};border:1.5px solid ${trained?'var(--red)':isToday?'var(--text3)':'var(--border)'}"></div>
-      <div style="font-size:9px;color:${isToday?'var(--red)':'var(--text3)'};font-weight:${isToday?'700':'400'}">${label}</div>
-    </div>`;
-  }).join('');
-
-  const chips = majorMuscles.map(m=>{
-    const count = trainedThisWeek[m]||0;
-    const color = count>=2?'#22c55e':count===1?'#f97316':'var(--surface)';
-    const border = count>=2?'#22c55e':count===1?'#f97316':'var(--border)';
-    const textColor = count>=2?'#fff':count===1?'#fff':'var(--text3)';
-    return `<span style="display:inline-flex;align-items:center;gap:3px;padding:3px 8px;border-radius:20px;font-size:10px;font-weight:700;background:${color};color:${textColor};border:1px solid ${border}">
-      ${m} ${count>0?count+'×':'—'}
-    </span>`;
-  }).join('');
-
-  el.innerHTML=`
-    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px">
-      <div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.8px;color:var(--text3)">This Week (Mon–Sun)</div>
-      <div style="font-size:10px;color:var(--text3)">${trainedDays.size} day${trainedDays.size!==1?'s':''} trained</div>
-    </div>
-    <div style="display:flex;gap:4px;margin-bottom:10px">${dayDots}</div>
-    <div style="display:flex;flex-wrap:wrap;gap:4px">${chips}</div>`;
-}
-function closeSmartSuggest(){
-  document.getElementById('smart-suggest-modal').style.display='none';
-}
-function showStep1(){
-  document.getElementById('ss-step1').style.display='block';
-  document.getElementById('ss-step2').style.display='none';
-}
 function renderMuscleChipsSS(){
+  const MUSCLE_GROUPS_SS=['Chest','Back','Shoulders','Biceps','Triceps','Legs','Glutes','Hamstrings','Calves','Abs','Cardio','Forearms'];
+  const MUSCLE_EMOJIS_SS={Chest:'🏋️',Back:'🔙',Shoulders:'🔺',Biceps:'💪',Triceps:'🔩',Legs:'🦵',Glutes:'🍑',Hamstrings:'🦿',Calves:'🦶',Abs:'⚡',Cardio:'🏃',Forearms:'✊'};
   const wrap=document.getElementById('ss-muscle-chips');
+  if(!wrap) return;
   wrap.innerHTML=MUSCLE_GROUPS_SS.map(m=>`
     <button onclick="toggleMuscleChipSS('${m}')" id="ss-chip-${m}"
       style="padding:8px 14px;border-radius:20px;border:2px solid var(--border);background:var(--surface2);
@@ -6340,463 +6513,197 @@ function renderMuscleChipsSS(){
       ${MUSCLE_EMOJIS_SS[m]||'•'} ${m}
     </button>`).join('');
 }
+
 function toggleMuscleChipSS(m){
   const btn=document.getElementById('ss-chip-'+m);
   if(_ssSelected.has(m)){
     _ssSelected.delete(m);
-    btn.style.background='var(--surface2)';
-    btn.style.borderColor='var(--border)';
-    btn.style.color='var(--text2)';
+    if(btn){btn.style.background='var(--surface2)';btn.style.borderColor='var(--border)';btn.style.color='var(--text2)';}
   } else {
     _ssSelected.add(m);
-    btn.style.background='var(--red)';
-    btn.style.borderColor='var(--red)';
-    btn.style.color='#fff';
+    if(btn){btn.style.background='var(--red)';btn.style.borderColor='var(--red)';btn.style.color='#fff';}
   }
   const genBtn=document.getElementById('ss-generate-btn');
   genBtn.disabled=_ssSelected.size===0;
   genBtn.style.opacity=_ssSelected.size>0?'1':'0.4';
 }
-function generateSuggestions(){
-  if(_ssSelected.size===0) return;
-  const muscles=[..._ssSelected];
-  const today=todayStr();
-  const mem=state.exerciseMemory||{};
-  const pool=[];
-  muscles.forEach(muscle=>{
-    const nextSess=getNextSession(muscle); // A or B
-    const dbExercises=EXERCISE_DB[muscle]||[];
-    dbExercises.forEach(ex=>{
-      const key=ex.name.toUpperCase();
-      const memData=mem[key]||{};
-      const sessionCount=memData.count||0;
-      let lastWeight=0,lastReps=0,lastDate=null;
-      for(let i=state.workoutHistory.length-1;i>=0;i--){
-        const w=state.workoutHistory[i];
-        const found=w.exercises.find(e=>e.name.toUpperCase()===key);
-        if(found&&found.sets.length){
-          lastWeight=found.sets[found.sets.length-1].w||0;
-          lastReps=found.sets[found.sets.length-1].r||0;
-          lastDate=w.date;
-          break;
-        }
-      }
-      const daysSince=lastDate?Math.floor((new Date(today)-new Date(lastDate))/86400000):999;
-      let score=0;
-      // Prioritise exercises matching the recommended session (A or B)
-      if(ex.session===nextSess) score+=30;
-      if(sessionCount>0) score+=Math.min(sessionCount*2,20);
-      if(daysSince>7) score+=15;
-      else if(daysSince>3) score+=8;
-      else if(daysSince<=1) score-=15; // just did it
-      const name=ex.name.toLowerCase();
-      if(/(squat|deadlift|bench|row|press|pull.up|chin.up)/.test(name)) score+=10;
-      pool.push({exercise:ex,muscle,sessionCount,lastWeight,lastReps,lastDate,daysSince,score,selected:true,nextSess});
-    });
+
+function selectGuidedSplit(splitName){
+  document.querySelectorAll('.ss-split-btn').forEach(b=>{
+    const isThis=b.textContent.toLowerCase().includes(splitName.toLowerCase());
+    b.style.background=isThis?'var(--red)':'var(--surface2)';
+    b.style.color=isThis?'#fff':'var(--text2)';
+    b.style.borderColor=isThis?'var(--red)':'var(--border)';
   });
-  if(!pool.length){toast('No exercises found for selected muscles');return;}
-  pool.sort((a,b)=>b.score-a.score);
-  const perMuscle={};
-  const final=[];
-  pool.forEach(p=>{
-    if(!perMuscle[p.muscle]) perMuscle[p.muscle]=0;
-    const maxPerMuscle=muscles.length===1?5:3;
-    if(perMuscle[p.muscle]<maxPerMuscle&&final.length<12){
-      perMuscle[p.muscle]++;
-      final.push(p);
-    }
-  });
-  _ssSuggestions=final;
-  // Store session info for display
-  _ssSessionInfo = muscles.map(m => `${m}: Session ${getNextSession(m)}`).join(' · ');
+  const muscles=SPLIT_DAYS[splitName]||[];
+  _ssSelected=new Set(muscles.filter(m=>EXERCISE_DB[m]||m==='Rear Delts'));
+  const genBtn=document.getElementById('ss-generate-btn');
+  if(genBtn){genBtn.disabled=false;genBtn.style.opacity='1';genBtn.textContent='Generate '+splitName+' Day Workout →';}
+}
+
+// Main entry: select split and generate immediately
+function selectAndGenerateSplit(splitName){
+  _currentSplitName=splitName;
+  const generated=generateWorkout(splitName);
+  _ssSuggestions=generated.map(g=>({
+    exercise:g.exercise,
+    muscle:g.muscle,
+    isAnchor:g.isAnchor,
+    sets:g.sets,
+    selected:true,
+    lastPerf:getLastPerformance(g.exercise.name)
+  }));
   document.getElementById('ss-step1').style.display='none';
   document.getElementById('ss-step2').style.display='flex';
-  document.getElementById('ss-subtitle').textContent=_ssSessionInfo+' · '+final.length+' exercises — tap to deselect';
+  const req=SPLIT_REQUIREMENTS[splitName]||{};
+  const totalEx=_ssSuggestions.length;
+  document.getElementById('ss-subtitle').textContent=
+    splitName+' Day · '+totalEx+' exercises · Compounds first · Tap to deselect any';
   renderSuggestions();
 }
+
+// Free choice generate
+function generateSuggestions(){
+  if(_ssMode==='free'&&_ssSelected.size>0){
+    // For free choice, use first matching split or custom generate
+    const muscles=[..._ssSelected];
+    // Find closest split match
+    let bestSplit=null,bestOverlap=0;
+    for(const [split,splitMuscles] of Object.entries(SPLIT_DAYS)){
+      const overlap=muscles.filter(m=>splitMuscles.includes(m)).length;
+      if(overlap>bestOverlap){bestOverlap=overlap;bestSplit=split;}
+    }
+    if(bestSplit&&bestOverlap>=2){
+      selectAndGenerateSplit(bestSplit);
+    } else {
+      // Custom: generate for selected muscles only
+      _currentSplitName='Custom';
+      const generated=[];
+      muscles.forEach(muscle=>{
+        const dbKey=muscle==='Rear Delts'?'Shoulders':muscle;
+        const available=(EXERCISE_DB[dbKey]||[])
+          .filter(ex=>muscle!=='Rear Delts'||ex.head?.toLowerCase().includes('rear'))
+          .slice(0,3);
+        available.forEach(ex=>generated.push({
+          exercise:ex,muscle,isAnchor:false,sets:buildSets ? [{w:0,r:10,done:false},{w:0,r:10,done:false},{w:0,r:10,done:false}]:[]
+        }));
+      });
+      _ssSuggestions=generated.map(g=>({...g,selected:true,lastPerf:getLastPerformance(g.exercise.name)}));
+      document.getElementById('ss-step1').style.display='none';
+      document.getElementById('ss-step2').style.display='flex';
+      document.getElementById('ss-subtitle').textContent='Custom · '+_ssSuggestions.length+' exercises';
+      renderSuggestions();
+    }
+  } else {
+    toast('Select at least one muscle group');
+  }
+}
+
 function renderSuggestions(){
   const list=document.getElementById('ss-exercise-list');
   if(!_ssSuggestions.length){
-    list.innerHTML='<div style="text-align:center;padding:20px;color:var(--text3)">No exercises found. Add some via the library first.</div>';
+    list.innerHTML='<div style="text-align:center;padding:20px;color:var(--text3)">No exercises found.</div>';
     return;
   }
-  list.innerHTML=_ssSuggestions.map((p,i)=>{
-    const hasHistory=p.lastDate!==null;
-    const lastStr=hasHistory?'Last: '+p.lastDate.slice(5)+' · '+p.lastWeight+'kg × '+p.lastReps:'No history yet';
-    const badge=p.daysSince<=1
-      ?'<span style="font-size:9px;background:#eab308;color:#000;padding:2px 5px;border-radius:4px;font-weight:700;margin-left:4px">RECENT</span>'
-      :p.daysSince>14
-      ?'<span style="font-size:9px;background:#6366f1;color:#fff;padding:2px 5px;border-radius:4px;font-weight:700;margin-left:4px">OVERDUE</span>'
-      :'';
-    const sessBadge=p.exercise.session
-      ?`<span style="font-size:9px;background:${p.exercise.session===p.nextSess?'var(--red)':'var(--surface2)'};color:${p.exercise.session===p.nextSess?'#fff':'var(--text3)'};padding:2px 5px;border-radius:4px;font-weight:700;margin-left:4px">Session ${p.exercise.session}</span>`
-      :'';
-    const headStr=p.exercise.head?`<span style="font-size:10px;color:#6366f1;font-weight:600">${p.exercise.head}</span> · `:'';
-    const tip=p.exercise.tip?`<div style="font-size:10px;color:var(--text3);margin-top:2px;font-style:italic">💡 ${p.exercise.tip}</div>`:'';
-    return `<div id="ss-item-${i}" onclick="toggleSuggestion(${i})"
-      style="display:flex;align-items:flex-start;gap:10px;padding:10px 12px;margin-bottom:6px;border-radius:10px;cursor:pointer;transition:all .15s;
-             background:${p.selected?'rgba(226,75,74,.08)':'var(--surface2)'};border:2px solid ${p.selected?'var(--red)':'transparent'}">
-      <div style="width:24px;height:24px;border-radius:50%;flex-shrink:0;margin-top:2px;background:${p.selected?'var(--red)':'var(--surface)'};border:2px solid ${p.selected?'var(--red)':'var(--border)'};display:flex;align-items:center;justify-content:center;color:#fff;font-size:13px;font-weight:700">${p.selected?'✓':''}</div>
-      <div style="flex:1;min-width:0">
-        <div style="font-weight:700;font-size:14px">${p.exercise.name}${badge}${sessBadge}</div>
-        <div style="font-size:11px;color:var(--text3);margin-top:2px">${headStr}${p.muscle} · ${lastStr}${p.sessionCount>0?' · '+p.sessionCount+'x done':''}</div>
-        ${tip}
-      </div>
-    </div>`;
-  }).join('');
+
+  // Group by muscle for display
+  const byMuscle={};
+  _ssSuggestions.forEach((p,i)=>{
+    if(!byMuscle[p.muscle]) byMuscle[p.muscle]=[];
+    byMuscle[p.muscle].push({...p,idx:i});
+  });
+
+  let html='';
+  for(const [muscle,items] of Object.entries(byMuscle)){
+    html+=`<div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.8px;color:var(--red);margin:10px 0 6px;padding-left:2px">${muscle}</div>`;
+    items.forEach(p=>{
+      const i=p.idx;
+      const ex=p.exercise;
+      const lastStr=p.lastPerf
+        ?'Last '+p.lastPerf.date.slice(5)+' · '+p.lastPerf.weight+'kg × '+p.lastPerf.reps
+        :'New exercise';
+      const anchorBadge=p.isAnchor?'<span style="font-size:9px;background:#f97316;color:#fff;padding:2px 5px;border-radius:4px;font-weight:700;margin-left:4px">ANCHOR</span>':'';
+      const typeBadge=ex.type==='compound'
+        ?'<span style="font-size:9px;background:rgba(99,102,241,.15);color:#6366f1;padding:2px 5px;border-radius:4px;font-weight:700;margin-left:4px">COMPOUND</span>'
+        :'<span style="font-size:9px;background:var(--surface2);color:var(--text3);padding:2px 5px;border-radius:4px;font-weight:600;margin-left:4px">ISOLATION</span>';
+      const sets=p.sets||[];
+      const setsStr=sets.length>0?sets.length+'×'+(sets[0].r||10)+' reps'+(sets[0].w>0?' @ '+sets[0].w+'kg':''):'3×10';
+      const progressNote=p.lastPerf&&sets[0]?.w>p.lastPerf.weight
+        ?'<span style="font-size:10px;color:#22c55e;margin-left:6px">↑ +2.5kg progression</span>':
+        p.lastPerf&&sets[0]?.r>p.lastPerf.reps
+        ?'<span style="font-size:10px;color:#22c55e;margin-left:6px">↑ +1 rep progression</span>':'';
+
+      html+=`<div onclick="toggleSuggestion(${i})" style="display:flex;align-items:flex-start;gap:10px;padding:10px 12px;margin-bottom:6px;border-radius:10px;cursor:pointer;transition:all .15s;background:${p.selected?'rgba(226,75,74,.08)':'var(--surface2)'};border:2px solid ${p.selected?'var(--red)':'transparent'}">
+        <div style="width:24px;height:24px;border-radius:50%;flex-shrink:0;margin-top:2px;background:${p.selected?'var(--red)':'var(--surface)'};border:2px solid ${p.selected?'var(--red)':'var(--border)'};display:flex;align-items:center;justify-content:center;color:#fff;font-size:13px;font-weight:700">${p.selected?'✓':''}</div>
+        <div style="flex:1;min-width:0">
+          <div style="font-weight:700;font-size:14px">${ex.name}${anchorBadge}${typeBadge}</div>
+          <div style="font-size:11px;color:var(--text3);margin-top:2px">${ex.head||''} · ${ex.equip||''} · ${ex.difficulty||''}</div>
+          <div style="font-size:11px;color:var(--text2);margin-top:3px;font-weight:600">${setsStr}${progressNote}</div>
+          <div style="font-size:10px;color:var(--text3);margin-top:2px">${lastStr}</div>
+          ${ex.tip?`<div style="font-size:10px;color:var(--text3);margin-top:3px;font-style:italic">💡 ${ex.tip}</div>`:''}
+        </div>
+      </div>`;
+    });
+  }
+  list.innerHTML=html;
   updateAddAllBtn();
 }
+
 function toggleSuggestion(i){
   _ssSuggestions[i].selected=!_ssSuggestions[i].selected;
   renderSuggestions();
 }
+
 function updateAddAllBtn(){
   const count=_ssSuggestions.filter(p=>p.selected).length;
   const btn=document.getElementById('ss-add-all-btn');
   if(!btn) return;
-  btn.textContent=count>0?'Add '+count+' Exercise'+(count>1?'s':'')+' to Workout':'None selected';
+  btn.textContent=count>0?'Add '+count+' Exercise'+(count>1?'s':'')+' to Workout':'Select exercises above';
   btn.disabled=count===0;
   btn.style.opacity=count>0?'1':'0.5';
 }
-// ─── DIET PLAN FEATURE ───────────────────────────────────────────────────────
 
-function openDietPlanImport(){
-  document.getElementById('diet-plan-modal').style.display='flex';
-  document.getElementById('diet-plan-input').value='';
-  document.getElementById('diet-plan-parse-preview').innerHTML='';
-}
-function closeDietPlanModal(){
-  document.getElementById('diet-plan-modal').style.display='none';
-}
-function openDietPlanManager(){
-  document.getElementById('diet-plan-manager-modal').style.display='flex';
-  renderDietPlanManager();
-}
-function closeDietPlanManager(){
-  document.getElementById('diet-plan-manager-modal').style.display='none';
-}
+function addAllSuggested(){
+  const toAdd=_ssSuggestions.filter(p=>p.selected);
+  if(!toAdd.length){toast('Select at least one exercise');return;}
 
-function parseDietPlanText(text){
-  const lines=text.split('\n').map(l=>l.trim()).filter(Boolean);
-  const plan={name:'My Diet Plan',days:14,rotation:[],startDate:todayStr()};
-  let currentDay=null;
-  lines.forEach(line=>{
-    const lower=line.toLowerCase();
-    if(lower.startsWith('plan:')){ plan.name=line.split(':').slice(1).join(':').trim(); return; }
-    if(lower.startsWith('days:')){ plan.days=parseInt(line.split(':')[1])||14; return; }
-    if(lower.match(/^day\s*\d+/)){
-      const dayNum=parseInt(lower.match(/\d+/)[0]);
-      currentDay={day:dayNum,breakfast:[],lunch:[],dinner:[],snack:[]};
-      plan.rotation.push(currentDay);
-      return;
-    }
-    if(currentDay&&lower.match(/^(breakfast|lunch|dinner|snack):/)){
-      const [meal,...rest]=line.split(':');
-      const key=meal.trim().toLowerCase();
-      currentDay[key]=rest.join(':').split(',').map(f=>f.trim()).filter(Boolean);
-    }
-  });
-  if(!plan.rotation.length){
-    const day1={day:1,breakfast:[],lunch:[],dinner:[],snack:[]};
-    lines.forEach(line=>{
-      const lower=line.toLowerCase();
-      if(lower.match(/^(breakfast|lunch|dinner|snack):/)){
-        const [meal,...rest]=line.split(':');
-        day1[meal.trim().toLowerCase()]=rest.join(':').split(',').map(f=>f.trim()).filter(Boolean);
-      }
+  // Record session rotation
+  if(_currentSplitName){
+    const muscles=[...new Set(toAdd.map(p=>p.muscle))];
+    muscles.forEach(m=>{
+      const session=toAdd.find(p=>p.muscle===m)?.exercise?.session||'A';
+      recordSessionDone(m, session);
     });
-    if(Object.values(day1).some(v=>Array.isArray(v)&&v.length)) plan.rotation.push(day1);
   }
-  return plan;
-}
 
-function matchPlanFood(str){
-  if(!str) return {name:str,matched:false,grams:100};
-  const qtyMatch=str.match(/^(\d+(?:\.\d+)?)\s*(g|ml|cup|cups|piece|pieces|roti|idli|x)?\s+(.+)/i);
-  let qty=1,grams=100,name=str;
-  if(qtyMatch){
-    qty=parseFloat(qtyMatch[1]);
-    const unit=(qtyMatch[2]||'').toLowerCase();
-    name=qtyMatch[3].trim();
-    if(unit==='g'||unit==='ml') grams=qty;
-  }
-  const nameLower=name.toLowerCase();
-  let best=null,bestScore=0;
-  FOOD_DB.forEach(f=>{
-    const fn=f.name.toLowerCase();
-    let score=0;
-    if(fn===nameLower) score=100;
-    else if(fn.startsWith(nameLower)) score=80;
-    else if(fn.includes(nameLower)) score=60;
-    else { nameLower.split(' ').filter(w=>w.length>3).forEach(w=>{ if(fn.includes(w)) score+=20; }); }
-    if(score>bestScore){bestScore=score;best=f;}
+  // Sort: compounds first, then group by muscle
+  const sorted=[...toAdd].sort((a,b)=>{
+    if(a.exercise.type==='compound'&&b.exercise.type!=='compound') return -1;
+    if(a.exercise.type!=='compound'&&b.exercise.type==='compound') return 1;
+    return 0;
   });
-  if(!best||bestScore<20) return {name:str,matched:false,grams:100};
-  if(grams===100&&best.pieceG&&qty>1) grams=best.pieceG*qty;
-  else if(grams===100&&qty>1) grams=qty*(best.pieceG||100);
-  return {name:best.name,matched:true,grams,food:best,
-    kcal:Math.round(best.kcal*grams/100),
-    protein:parseFloat((best.protein*grams/100).toFixed(1))};
-}
 
-function parseDietPlan(){
-  const text=document.getElementById('diet-plan-input').value.trim();
-  if(!text){toast('Paste your diet plan first');return;}
-  const plan=parseDietPlanText(text);
-  if(!plan.rotation.length){
-    document.getElementById('diet-plan-parse-preview').innerHTML=
-      '<div style="color:var(--red);font-size:13px;padding:8px">Could not parse — check the format above.</div>';
-    return;
-  }
-  const day1=plan.rotation[0];
-  const meals=['breakfast','lunch','dinner','snack'];
-  let totalKcal=0;
-  let html=`<div style="background:var(--surface2);border-radius:10px;padding:12px;margin-bottom:10px">
-    <div style="font-weight:700;font-size:14px;margin-bottom:8px">✓ <span style="color:var(--red)">${plan.name}</span> · ${plan.days} days · ${plan.rotation.length}-day rotation</div>`;
-  meals.forEach(meal=>{
-    const items=day1[meal]||[];
-    if(!items.length) return;
-    const matched=items.map(f=>matchPlanFood(f));
-    const mealKcal=matched.reduce((a,m)=>a+(m.kcal||0),0);
-    totalKcal+=mealKcal;
-    html+=`<div style="margin-bottom:8px">
-      <div style="font-size:11px;font-weight:700;text-transform:uppercase;color:var(--text3);margin-bottom:3px">${meal} · ~${mealKcal} kcal</div>
-      ${matched.map(m=>`<div style="font-size:12px;padding:2px 0;color:${m.matched?'var(--text)':'var(--text3)'}">
-        ${m.matched?'✓':'⚠'} ${m.name}${m.matched?` · ${m.grams}g · ${m.kcal} kcal`:''}
-      </div>`).join('')}
-    </div>`;
-  });
-  html+=`<div style="font-size:14px;font-weight:700;color:var(--red);border-top:1px solid var(--border);padding-top:8px;margin-top:4px">~${totalKcal} kcal/day</div></div>
-  <button class="btn-primary" onclick="activateDietPlan()" style="width:100%;font-size:15px;padding:13px">✓ Start Plan from Today</button>`;
-  document.getElementById('diet-plan-parse-preview').innerHTML=html;
-  window._parsedPlan=plan;
-}
-
-function activateDietPlan(){
-  if(!window._parsedPlan){toast('Parse a plan first');return;}
-  const plan=window._parsedPlan;
-  plan.startDate=todayStr(); plan.active=true;
-  if(!state.dietPlans) state.dietPlans=[];
-  state.dietPlans.forEach(p=>p.active=false);
-  state.dietPlans.push(plan);
-  state.activeDietPlan=plan;
-  saveState({profile:true});
-  closeDietPlanModal();
-  renderDietPlanBanner();
-  renderFoodPage();
-  toast('"'+plan.name+'" started! '+plan.days+' days from today 🥗');
-}
-
-function getDietPlanDay(){
-  const plan=state.activeDietPlan;
-  if(!plan||!plan.active) return null;
-  const dayNum=Math.floor((new Date(todayStr())-new Date(plan.startDate))/86400000)+1;
-  return (dayNum>=1&&dayNum<=plan.days)?dayNum:null;
-}
-
-function getTodaysPlanMeals(){
-  const plan=state.activeDietPlan;
-  if(!plan) return null;
-  const dayNum=getDietPlanDay();
-  if(!dayNum) return null;
-  return plan.rotation[(dayNum-1)%plan.rotation.length];
-}
-
-function renderDietPlanBanner(){
-  const plan=state.activeDietPlan;
-  const banner=document.getElementById('diet-plan-banner');
-  const importBtn=document.getElementById('diet-plan-import-btn');
-  const homeBanner=document.getElementById('home-diet-plan-banner');
-  const homeImportBtn=document.getElementById('home-diet-import-btn');
-
-  const dayNum=getDietPlanDay();
-  const hasActivePlan=plan&&plan.active&&dayNum;
-
-  // Food page
-  if(banner){
-    banner.style.display=hasActivePlan?'block':'none';
-    if(importBtn) importBtn.style.display=hasActivePlan?'none':'block';
-  }
-  // Home panel
-  if(homeBanner){
-    homeBanner.style.display=hasActivePlan?'block':'none';
-    if(homeImportBtn) homeImportBtn.style.display=hasActivePlan?'none':'block';
-  }
-
-  if(!hasActivePlan) return;
-
-  const daysLeft=plan.days-dayNum+1;
-  const statusText='Day '+dayNum+' of '+plan.days+' · '+daysLeft+' day'+(daysLeft!==1?'s':'')+' left';
-  const todayMeals=getTodaysPlanMeals();
-  const preview=todayMeals
-    ?['breakfast','lunch','dinner','snack']
-      .filter(m=>(todayMeals[m]||[]).length>0)
-      .map(m=>todayMeals[m].slice(0,2).join(', '))
-      .join(' · ')
-    :'';
-
-  // Update food page banner
-  const nameEl=document.getElementById('diet-plan-name');
-  const statusEl=document.getElementById('diet-plan-status');
-  const prevEl=document.getElementById('diet-plan-preview');
-  if(nameEl) nameEl.textContent=plan.name;
-  if(statusEl) statusEl.textContent=statusText;
-  if(prevEl) prevEl.textContent=preview;
-
-  // Update home banner
-  const hName=document.getElementById('home-diet-plan-name');
-  const hStatus=document.getElementById('home-diet-plan-status');
-  if(hName) hName.textContent=plan.name;
-  if(hStatus) hStatus.textContent=statusText;
-}
-
-function logTodaysPlan(){
-  const todayMeals=getTodaysPlanMeals();
-  if(!todayMeals){toast('No plan for today');return;}
-  const log=getFoodLog();
-  let count=0,totalKcal=0;
-  ['breakfast','lunch','dinner','snack'].forEach(meal=>{
-    const items=todayMeals[meal]||[];
-    if(!items.length) return;
-    if(!log.meals[meal]) log.meals[meal]=[];
-    items.forEach(str=>{
-      const m=matchPlanFood(str);
-      if(m.matched&&m.food){
-        const g=m.grams||100;
-        log.meals[meal].push({name:m.food.name,grams:g,unit:'g',amount:g,
-          kcal:Math.round(m.food.kcal*g/100),
-          protein:parseFloat((m.food.protein*g/100).toFixed(1)),
-          carbs:parseFloat((m.food.carbs*g/100).toFixed(1)),
-          fat:parseFloat((m.food.fat*g/100).toFixed(1)),
-          fibre:parseFloat((m.food.fibre*g/100).toFixed(1))});
-        totalKcal+=Math.round(m.food.kcal*g/100);
-      } else {
-        log.meals[meal].push({name:str,grams:100,unit:'g',amount:100,
-          kcal:0,protein:0,carbs:0,fat:0,fibre:0,_planNote:true});
-      }
-      count++;
+  sorted.forEach(p=>{
+    if(state.exercises.some(e=>e.name.toUpperCase()===p.exercise.name.toUpperCase())) return;
+    state.exercises.push({
+      name:p.exercise.name,muscle:p.muscle,
+      met:p.exercise.met||5,
+      sets:p.sets||[{w:0,r:10,done:false},{w:0,r:10,done:false},{w:0,r:10,done:false}],
+      tip:p.exercise.tip||'',head:p.exercise.head||''
     });
+    state.expanded[state.exercises.length-1]=true;
+    learnExercise(p.exercise.name.toUpperCase(),p.muscle,p.exercise.met||5);
   });
-  state.foodLog[foodDate]=log;
-  saveState({food:foodDate});
-  renderFoodPage();
-  if(homeMode==='food') renderHomeFoodPanel();
-  toast('Logged '+count+' items from your plan · ~'+totalKcal+' kcal 🥗');
+
+  saveState({activeSession:true,memory:true});
+  closeSmartSuggest();
+  renderExercises();
+  const bar=document.getElementById('smart-suggest-bar');
+  if(bar) bar.style.display='none';
+  setTimeout(renderWeeklyCoverage,300);
+  toast('Added '+toAdd.length+' exercises → '+(_currentSplitName||'workout')+' day 💪');
 }
 
-function renderDietPlanManager(){
-  const plan=state.activeDietPlan;
-  const div=document.getElementById('diet-plan-manager-content');
-  if(!plan||!plan.active){
-    div.innerHTML='<div style="text-align:center;padding:20px;color:var(--text3)">No active plan.<br><button onclick="closeDietPlanManager();openDietPlanImport()" class="btn-primary" style="margin-top:12px;padding:11px 20px;font-size:14px">Import a Plan</button></div>';
-    return;
-  }
-  const dayNum=getDietPlanDay();
-  const daysLeft=dayNum?plan.days-dayNum+1:0;
-  const progress=dayNum?Math.round((dayNum/plan.days)*100):100;
-  let html=`<div style="background:var(--surface2);border-radius:12px;padding:14px;margin-bottom:12px">
-    <div style="font-size:10px;font-weight:700;text-transform:uppercase;color:var(--text3);margin-bottom:3px">Plan name</div>
-    <input id="dp-edit-name" value="${plan.name}" style="width:100%;padding:6px 8px;border:1px solid var(--border);border-radius:8px;background:var(--surface);color:var(--text);font-size:14px;font-weight:700;box-sizing:border-box;margin-bottom:8px" oninput="updatePlanField('name',this.value)">
-    <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:10px">
-      <div>
-        <div style="font-size:10px;font-weight:700;text-transform:uppercase;color:var(--text3);margin-bottom:3px">Start date</div>
-        <input type="date" value="${plan.startDate}" style="width:100%;padding:6px 8px;border:1px solid var(--border);border-radius:8px;background:var(--surface);color:var(--text);font-size:12px;box-sizing:border-box" oninput="updatePlanField('startDate',this.value)">
-      </div>
-      <div>
-        <div style="font-size:10px;font-weight:700;text-transform:uppercase;color:var(--text3);margin-bottom:3px">Duration (days)</div>
-        <input type="number" value="${plan.days}" min="1" max="365" style="width:100%;padding:6px 8px;border:1px solid var(--border);border-radius:8px;background:var(--surface);color:var(--text);font-size:12px;box-sizing:border-box" oninput="updatePlanField('days',parseInt(this.value)||14)">
-      </div>
-    </div>
-    ${dayNum?`<div style="font-size:13px;color:var(--red);font-weight:700">Day ${dayNum} of ${plan.days} · ${daysLeft} days left</div>
-    <div style="height:5px;background:var(--border);border-radius:3px;margin-top:6px;overflow:hidden">
-      <div style="height:100%;width:${progress}%;background:var(--red);border-radius:3px"></div>
-    </div>`:`<div style="font-size:13px;color:#22c55e;font-weight:700">Plan completed!</div>`}
-  </div>
-  <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
-    <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--text3)">Day Rotation</div>
-    <button onclick="addPlanDay()" style="background:var(--red);color:#fff;border:none;border-radius:8px;padding:5px 10px;font-size:12px;font-weight:700;cursor:pointer">+ Add Day</button>
-  </div>`;
-  plan.rotation.forEach((day,dayIdx)=>{
-    const meals=['breakfast','lunch','dinner','snack'];
-    html+=`<div style="background:var(--surface2);border-radius:10px;padding:10px 12px;margin-bottom:8px">
-      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
-        <div style="font-family:var(--font-cond);font-weight:700;font-size:15px;color:var(--red)">DAY ${day.day}${plan.rotation.length===1?' · repeats daily':''}</div>
-        <button onclick="deletePlanDay(${dayIdx})" style="background:rgba(226,75,74,.1);border:none;color:var(--red);font-size:12px;font-weight:700;cursor:pointer;padding:3px 8px;border-radius:6px">Delete day</button>
-      </div>`;
-    meals.forEach(meal=>{
-      const items=day[meal]||[];
-      html+=`<div style="margin-bottom:8px">
-        <div style="font-size:10px;font-weight:700;text-transform:uppercase;color:var(--text3);margin-bottom:4px">${meal}</div>
-        ${items.map((item,itemIdx)=>`<div style="display:flex;align-items:center;gap:6px;margin-bottom:4px">
-          <input value="${item.replace(/"/g,'&quot;')}" style="flex:1;min-width:0;padding:5px 8px;border:1px solid var(--border);border-radius:7px;background:var(--surface);color:var(--text);font-size:12px" onchange="updatePlanItem(${dayIdx},'${meal}',${itemIdx},this.value)">
-          <button onclick="deletePlanItem(${dayIdx},'${meal}',${itemIdx})" style="background:none;border:none;color:var(--text3);font-size:18px;cursor:pointer;padding:0 4px;flex-shrink:0;line-height:1">&times;</button>
-        </div>`).join('')}
-        <button onclick="addPlanItem(${dayIdx},'${meal}')" style="background:none;border:1px dashed var(--border);border-radius:7px;padding:4px 10px;font-size:11px;color:var(--text3);cursor:pointer;width:100%;margin-top:2px">+ add item</button>
-      </div>`;
-    });
-    html+=`</div>`;
-  });
-  html+=`<div style="display:flex;gap:8px;margin-top:12px">
-    <button onclick="logTodaysPlan();closeDietPlanManager()" class="btn-primary" style="flex:2;font-size:14px;padding:11px">Log Today</button>
-    <button onclick="endDietPlan()" style="flex:1;background:var(--surface2);border:1px solid var(--border);border-radius:10px;padding:11px;font-size:13px;color:var(--red);font-weight:700;cursor:pointer">Delete Plan</button>
-  </div>
-  <button onclick="closeDietPlanManager();openDietPlanImport()" style="width:100%;margin-top:8px;background:none;border:1px solid var(--border);border-radius:10px;padding:10px;font-size:13px;color:var(--text2);font-weight:600;cursor:pointer">+ Import New Plan</button>`;
-  div.innerHTML=html;
-}
-
-function updatePlanField(field,value){
-  if(!state.activeDietPlan) return;
-  state.activeDietPlan[field]=value;
-  saveState({profile:true});
-  renderDietPlanBanner();
-}
-function updatePlanItem(dayIdx,meal,itemIdx,value){
-  if(!state.activeDietPlan) return;
-  state.activeDietPlan.rotation[dayIdx][meal][itemIdx]=value;
-  saveState({profile:true});
-}
-function deletePlanItem(dayIdx,meal,itemIdx){
-  if(!state.activeDietPlan) return;
-  state.activeDietPlan.rotation[dayIdx][meal].splice(itemIdx,1);
-  saveState({profile:true});
-  renderDietPlanManager();
-}
-function addPlanItem(dayIdx,meal){
-  if(!state.activeDietPlan) return;
-  const item=prompt('Add food item (e.g. "2 idli" or "rice 200g"):','');
-  if(!item||!item.trim()) return;
-  if(!state.activeDietPlan.rotation[dayIdx][meal]) state.activeDietPlan.rotation[dayIdx][meal]=[];
-  state.activeDietPlan.rotation[dayIdx][meal].push(item.trim());
-  saveState({profile:true});
-  renderDietPlanManager();
-}
-function deletePlanDay(dayIdx){
-  if(!state.activeDietPlan) return;
-  if(state.activeDietPlan.rotation.length<=1){toast('Cannot delete the only day');return;}
-  if(!confirm('Delete Day '+(dayIdx+1)+'?')) return;
-  state.activeDietPlan.rotation.splice(dayIdx,1);
-  state.activeDietPlan.rotation.forEach((d,i)=>d.day=i+1);
-  saveState({profile:true});
-  renderDietPlanManager();
-}
-function addPlanDay(){
-  if(!state.activeDietPlan) return;
-  const n=state.activeDietPlan.rotation.length+1;
-  state.activeDietPlan.rotation.push({day:n,breakfast:[],lunch:[],dinner:[],snack:[]});
-  saveState({profile:true});
-  renderDietPlanManager();
-  toast('Day '+n+' added');
-}
-
-function endDietPlan(){
-  if(!confirm('Delete this diet plan?')) return;
-  if(state.activeDietPlan) state.activeDietPlan.active=false;
-  saveState({profile:true});
-  closeDietPlanManager();
-  renderDietPlanBanner();
-  renderFoodPage();
-  toast('Diet plan deleted');
-}
 
 // ─── FOOD TAB SWITCHER ────────────────────────────────────────────────────────
 let _activeFoodTab = 'search';

@@ -588,6 +588,12 @@ select.inp{cursor:pointer}
     <div id="day-detail-panel"></div>
     <div id="today-workout-section">
       <button class="copy-workout-btn" onclick="copyLastWorkout()">📋 Copy Last Workout</button>
+      <!-- AI refine button — inside today section, shown when exercises exist -->
+      <div id="ai-refine-bar" style="display:none;margin-bottom:10px">
+        <button onclick="openAIRefine()" style="width:100%;background:linear-gradient(135deg,#6366f1,#8b5cf6);color:#fff;border:none;border-radius:12px;padding:11px 16px;font-size:13px;font-weight:700;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:6px">
+          🤖 AI Coach — Review & Improve This Workout
+        </button>
+      </div>
       <!-- QUICK ADD -->
       <div class="quick-add-wrap" id="quick-add-wrap">
         <div style="display:flex;gap:6px;align-items:flex-start">
@@ -2028,9 +2034,11 @@ function renderExercises(){
   let td=0,ts=0,tv=0;
   const bw=state.calProfile.wt||75;
 
-  // Show/hide the smart suggest bar
+  // Show/hide the smart suggest bar and AI refine bar
   const ssBar = document.getElementById('smart-suggest-bar');
+  const aiBar = document.getElementById('ai-refine-bar');
   if(ssBar) ssBar.style.display = state.exercises.length===0 ? 'block' : 'none';
+  if(aiBar) aiBar.style.display = state.exercises.length===0 ? 'none' : 'block';
 
   // Empty state
   if(!state.exercises.length){
@@ -6704,6 +6712,487 @@ function addAllSuggested(){
   toast('Added '+toAdd.length+' exercises → '+(_currentSplitName||'workout')+' day 💪');
 }
 
+
+// ── Weekly muscle coverage tracker ───────────────────────────────────────────
+function renderWeeklyCoverage(){
+  let el = document.getElementById('weekly-coverage-bar');
+  if(!el){
+    el = document.createElement('div');
+    el.id = 'weekly-coverage-bar';
+    el.style.cssText = 'padding:10px 16px;background:var(--surface2);border-radius:12px;margin:10px 0';
+    const container = document.getElementById('ex-container');
+    if(container && container.parentNode) container.parentNode.insertBefore(el, container);
+    else return;
+  }
+  const today = new Date();
+  const dow = (today.getDay() + 6) % 7;
+  const weekStart = new Date(today);
+  weekStart.setDate(today.getDate() - dow);
+  const weekStartStr = weekStart.toISOString().slice(0,10);
+  const majorMuscles = ['Chest','Back','Shoulders','Biceps','Triceps','Legs','Glutes','Abs'];
+  const trainedThisWeek = {};
+  const trainedDays = new Set();
+  (state.workoutHistory||[]).filter(w=>w.date>=weekStartStr).forEach(w=>{
+    trainedDays.add(w.date);
+    w.exercises.forEach(e=>{
+      const m=e.muscle||'';
+      if(!trainedThisWeek[m]) trainedThisWeek[m]=0;
+      trainedThisWeek[m]++;
+    });
+  });
+  const dayLabels=['Mon','Tue','Wed','Thu','Fri','Sat','Sun'];
+  const dayDots=dayLabels.map((label,i)=>{
+    const d=new Date(weekStart); d.setDate(weekStart.getDate()+i);
+    const ds=d.toISOString().slice(0,10);
+    const isToday=ds===todayStr(), trained=trainedDays.has(ds);
+    return `<div style="text-align:center;flex:1">
+      <div style="width:8px;height:8px;border-radius:50%;margin:0 auto 2px;background:${trained?'var(--red)':'transparent'};border:1.5px solid ${trained?'var(--red)':isToday?'var(--text3)':'var(--border)'}"></div>
+      <div style="font-size:9px;color:${isToday?'var(--red)':'var(--text3)'};font-weight:${isToday?'700':'400'}">${label}</div>
+    </div>`;
+  }).join('');
+  const chips=majorMuscles.map(m=>{
+    const count=trainedThisWeek[m]||0;
+    const color=count>=2?'#22c55e':count===1?'#f97316':'var(--surface)';
+    const border=count>=2?'#22c55e':count===1?'#f97316':'var(--border)';
+    const tc=count>=2||count===1?'#fff':'var(--text3)';
+    return `<span style="padding:3px 8px;border-radius:20px;font-size:10px;font-weight:700;background:${color};color:${tc};border:1px solid ${border}">${m} ${count>0?count+'×':'—'}</span>`;
+  }).join('');
+  el.innerHTML=`
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px">
+      <div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.8px;color:var(--text3)">This Week (Mon–Sun)</div>
+      <div style="font-size:10px;color:var(--text3)">${trainedDays.size} day${trainedDays.size!==1?'s':''} trained</div>
+    </div>
+    <div style="display:flex;gap:4px;margin-bottom:8px">${dayDots}</div>
+    <div style="display:flex;flex-wrap:wrap;gap:4px">${chips}</div>`;
+}
+
+// ─── AI WORKOUT REFINEMENT ─────────────────────────────────────────────────────
+async function openAIRefine(){
+  // Build context from current session + last 2 weeks history
+  const exercises = state.exercises||[];
+  if(!exercises.length){ toast('Add exercises first, then let AI refine them'); return; }
+
+  // Show refinement modal
+  let modal = document.getElementById('ai-refine-modal');
+  if(!modal){
+    modal = document.createElement('div');
+    modal.id = 'ai-refine-modal';
+    modal.className = 'modal-overlay';
+    modal.style.cssText = 'display:flex';
+    modal.onclick = e=>{ if(e.target===modal) modal.remove(); };
+    modal.innerHTML=`
+      <div class="modal-sheet" style="max-height:90vh;display:flex;flex-direction:column;overflow:hidden">
+        <div class="modal-handle"></div>
+        <div class="modal-header" style="flex-shrink:0">
+          <div class="modal-title">🤖 AI Workout Coach</div>
+          <button class="modal-close" onclick="document.getElementById('ai-refine-modal').remove()">×</button>
+        </div>
+        <div style="padding:14px 16px;flex-shrink:0;border-bottom:1px solid var(--border)">
+          <div style="font-size:12px;color:var(--text2);margin-bottom:10px">Tell me about today:</div>
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:10px">
+            <div>
+              <div style="font-size:10px;font-weight:700;text-transform:uppercase;color:var(--text3);margin-bottom:4px">Time available</div>
+              <select id="ai-time" class="inp" style="width:100%;font-size:13px">
+                <option value="30">30 mins</option>
+                <option value="45">45 mins</option>
+                <option value="60" selected>60 mins</option>
+                <option value="90">90 mins</option>
+              </select>
+            </div>
+            <div>
+              <div style="font-size:10px;font-weight:700;text-transform:uppercase;color:var(--text3);margin-bottom:4px">Energy level</div>
+              <select id="ai-energy" class="inp" style="width:100%;font-size:13px">
+                <option value="low">Low — easy day</option>
+                <option value="medium" selected>Medium — normal</option>
+                <option value="high">High — push hard</option>
+              </select>
+            </div>
+          </div>
+          <div>
+            <div style="font-size:10px;font-weight:700;text-transform:uppercase;color:var(--text3);margin-bottom:4px">Anything sore / injured? (optional)</div>
+            <input id="ai-sore" class="inp" placeholder="e.g. left shoulder, lower back..." style="width:100%;font-size:13px">
+          </div>
+        </div>
+        <button onclick="runAIRefine()" class="btn-primary" style="margin:12px 16px;font-size:15px;padding:13px" id="ai-refine-run-btn">
+          🤖 Analyse & Improve My Workout →
+        </button>
+        <div id="ai-refine-result" style="overflow-y:auto;flex:1;padding:0 16px 16px"></div>
+      </div>`;
+    document.body.appendChild(modal);
+  } else {
+    modal.style.display = 'flex';
+  }
+}
+
+async function runAIRefine(){
+  const btn = document.getElementById('ai-refine-run-btn');
+  const resultDiv = document.getElementById('ai-refine-result');
+  const time = document.getElementById('ai-time')?.value || '60';
+  const energy = document.getElementById('ai-energy')?.value || 'medium';
+  const sore = document.getElementById('ai-sore')?.value || '';
+
+  btn.textContent = '🤖 Analysing your history…';
+  btn.disabled = true;
+  resultDiv.innerHTML = '<div style="text-align:center;padding:20px;color:var(--text3)">Reviewing your workout history and building personalised advice…</div>';
+
+  // Build history summary (last 14 days)
+  const twoWeeksAgo = new Date(); twoWeeksAgo.setDate(twoWeeksAgo.getDate()-14);
+  const recentHistory = (state.workoutHistory||[])
+    .filter(w=>w.date>=twoWeeksAgo.toISOString().slice(0,10))
+    .map(w=>`${w.date}: ${w.exercises.map(e=>e.name+'('+e.sets.length+'sets)').join(', ')}`)
+    .join('\n');
+
+  const currentSession = (state.exercises||[]).map(ex=>{
+    const sets = ex.sets.map(s=>`${s.w}kg×${s.r}`).join(', ');
+    return `${ex.name} (${ex.muscle||''}) — ${sets}`;
+  }).join('\n');
+
+  const profile = state.calProfile||{};
+  const userContext = `Weight: ${profile.wt||75}kg, Fitness level: ${profile.fit||'intermediate'}`;
+
+  const prompt = `You are an expert personal trainer and sports scientist. Analyse this workout and give specific, actionable advice.
+
+USER PROFILE: ${userContext}
+TODAY'S SESSION:
+${currentSession}
+
+RECENT HISTORY (last 14 days):
+${recentHistory||'No recent history'}
+
+TODAY'S CONDITIONS:
+- Time available: ${time} minutes
+- Energy level: ${energy}
+- Sore/injured: ${sore||'Nothing mentioned'}
+
+Give your response in this EXACT format (keep it concise, use emojis):
+
+## Overall Assessment
+[2-3 sentences on the session quality, volume, balance]
+
+## What's Good ✅
+[2-3 bullet points on what's well programmed]
+
+## Suggested Tweaks 🔧
+[3-5 specific changes — exercise swaps, set/rep adjustments, order changes]
+
+## Progressive Overload Notes 📈
+[Specific weights/reps to target for their key lifts based on history]
+
+## Watch Out For ⚠️
+[Form cues, fatigue warnings, injury risk based on sore areas]
+
+Keep total response under 300 words. Be specific with numbers.`;
+
+  try{
+    const resp = await fetch('https://api.anthropic.com/v1/messages',{
+      method:'POST',
+      headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({
+        model:'claude-sonnet-4-20250514',
+        max_tokens:1000,
+        messages:[{role:'user',content:prompt}]
+      })
+    });
+    const data = await resp.json();
+    const text = data.content?.find(c=>c.type==='text')?.text||'Could not generate advice.';
+
+    // Render markdown-style response
+    const rendered = text
+      .replace(/## (.+)/g,'<div style="font-family:var(--font-cond);font-weight:900;font-size:16px;color:var(--red);margin:14px 0 6px">$1</div>')
+      .replace(/\*\*(.+?)\*\*/g,'<strong>$1</strong>')
+      .replace(/^- (.+)/gm,'<div style="display:flex;gap:8px;margin-bottom:6px"><span style="color:var(--red);flex-shrink:0">•</span><span style="font-size:13px;color:var(--text2)">$1</span></div>')
+      .replace(/\n/g,'<br>');
+
+    resultDiv.innerHTML=`
+      <div style="background:var(--surface2);border-radius:12px;padding:14px;margin-top:4px;line-height:1.6">
+        ${rendered}
+      </div>
+      <div style="font-size:10px;color:var(--text3);text-align:center;margin-top:10px">
+        Powered by Claude AI · Based on your last 14 days of training
+      </div>`;
+  } catch(e){
+    resultDiv.innerHTML='<div style="color:var(--red);padding:12px;font-size:13px">Could not connect to AI. Check your internet connection.</div>';
+    console.warn('AI refine error:',e);
+  }
+  btn.textContent='🤖 Analyse & Improve My Workout →';
+  btn.disabled=false;
+}
+
+// ─── DIET PLAN FEATURE ───────────────────────────────────────────────────────
+
+function openDietPlanImport(){
+  document.getElementById('diet-plan-modal').style.display='flex';
+  document.getElementById('diet-plan-input').value='';
+  document.getElementById('diet-plan-parse-preview').innerHTML='';
+}
+function closeDietPlanModal(){
+  document.getElementById('diet-plan-modal').style.display='none';
+}
+function openDietPlanManager(){
+  document.getElementById('diet-plan-manager-modal').style.display='flex';
+  renderDietPlanManager();
+}
+function closeDietPlanManager(){
+  document.getElementById('diet-plan-manager-modal').style.display='none';
+}
+
+function parseDietPlanText(text){
+  const lines=text.split('\n').map(l=>l.trim()).filter(Boolean);
+  const plan={name:'My Diet Plan',days:14,rotation:[],startDate:todayStr()};
+  let currentDay=null;
+  lines.forEach(line=>{
+    const lower=line.toLowerCase();
+    if(lower.startsWith('plan:')){ plan.name=line.split(':').slice(1).join(':').trim(); return; }
+    if(lower.startsWith('days:')){ plan.days=parseInt(line.split(':')[1])||14; return; }
+    if(lower.match(/^day\s*\d+/)){
+      const dayNum=parseInt(lower.match(/\d+/)[0]);
+      currentDay={day:dayNum,breakfast:[],lunch:[],dinner:[],snack:[]};
+      plan.rotation.push(currentDay); return;
+    }
+    if(currentDay&&lower.match(/^(breakfast|lunch|dinner|snack):/)){
+      const [meal,...rest]=line.split(':');
+      currentDay[meal.trim().toLowerCase()]=rest.join(':').split(',').map(f=>f.trim()).filter(Boolean);
+    }
+  });
+  if(!plan.rotation.length){
+    const day1={day:1,breakfast:[],lunch:[],dinner:[],snack:[]};
+    lines.forEach(line=>{
+      const lower=line.toLowerCase();
+      if(lower.match(/^(breakfast|lunch|dinner|snack):/)){
+        const [meal,...rest]=line.split(':');
+        day1[meal.trim().toLowerCase()]=rest.join(':').split(',').map(f=>f.trim()).filter(Boolean);
+      }
+    });
+    if(Object.values(day1).some(v=>Array.isArray(v)&&v.length)) plan.rotation.push(day1);
+  }
+  return plan;
+}
+
+function matchPlanFood(str){
+  if(!str) return {name:str,matched:false,grams:100};
+  const qtyMatch=str.match(/^(\d+(?:\.\d+)?)\s*(g|ml|cup|cups|piece|pieces|roti|idli|x)?\s+(.+)/i);
+  let qty=1,grams=100,name=str;
+  if(qtyMatch){
+    qty=parseFloat(qtyMatch[1]);
+    const unit=(qtyMatch[2]||'').toLowerCase();
+    name=qtyMatch[3].trim();
+    if(unit==='g'||unit==='ml') grams=qty;
+  }
+  const nameLower=name.toLowerCase();
+  let best=null,bestScore=0;
+  FOOD_DB.forEach(f=>{
+    const fn=f.name.toLowerCase();
+    let score=0;
+    if(fn===nameLower) score=100;
+    else if(fn.startsWith(nameLower)) score=80;
+    else if(fn.includes(nameLower)) score=60;
+    else { nameLower.split(' ').filter(w=>w.length>3).forEach(w=>{ if(fn.includes(w)) score+=20; }); }
+    if(score>bestScore){bestScore=score;best=f;}
+  });
+  if(!best||bestScore<20) return {name:str,matched:false,grams:100};
+  if(grams===100&&best.pieceG&&qty>1) grams=best.pieceG*qty;
+  else if(grams===100&&qty>1) grams=qty*(best.pieceG||100);
+  return {name:best.name,matched:true,grams,food:best,
+    kcal:Math.round(best.kcal*grams/100),
+    protein:parseFloat((best.protein*grams/100).toFixed(1))};
+}
+
+function parseDietPlan(){
+  const text=document.getElementById('diet-plan-input').value.trim();
+  if(!text){toast('Paste your diet plan first');return;}
+  const plan=parseDietPlanText(text);
+  if(!plan.rotation.length){
+    document.getElementById('diet-plan-parse-preview').innerHTML=
+      '<div style="color:var(--red);font-size:13px;padding:8px">Could not parse — check the format.</div>';
+    return;
+  }
+  const day1=plan.rotation[0];
+  const meals=['breakfast','lunch','dinner','snack'];
+  let totalKcal=0;
+  let html=`<div style="background:var(--surface2);border-radius:10px;padding:12px;margin-bottom:10px">
+    <div style="font-weight:700;font-size:14px;margin-bottom:8px">✓ <span style="color:var(--red)">${plan.name}</span> · ${plan.days} days · ${plan.rotation.length}-day rotation</div>`;
+  meals.forEach(meal=>{
+    const items=day1[meal]||[];
+    if(!items.length) return;
+    const matched=items.map(f=>matchPlanFood(f));
+    const mealKcal=matched.reduce((a,m)=>a+(m.kcal||0),0);
+    totalKcal+=mealKcal;
+    html+=`<div style="margin-bottom:8px">
+      <div style="font-size:11px;font-weight:700;text-transform:uppercase;color:var(--text3);margin-bottom:3px">${meal} · ~${mealKcal} kcal</div>
+      ${matched.map(m=>`<div style="font-size:12px;padding:2px 0;color:${m.matched?'var(--text)':'var(--text3)'}">
+        ${m.matched?'✓':'⚠'} ${m.name}${m.matched?' · '+m.grams+'g · '+m.kcal+' kcal':''}
+      </div>`).join('')}
+    </div>`;
+  });
+  html+=`<div style="font-size:14px;font-weight:700;color:var(--red);border-top:1px solid var(--border);padding-top:8px">~${totalKcal} kcal/day</div></div>
+  <button class="btn-primary" onclick="activateDietPlan()" style="width:100%;font-size:15px;padding:13px">✓ Start Plan from Today</button>`;
+  document.getElementById('diet-plan-parse-preview').innerHTML=html;
+  window._parsedPlan=plan;
+}
+
+function activateDietPlan(){
+  if(!window._parsedPlan){toast('Parse a plan first');return;}
+  const plan=window._parsedPlan;
+  plan.startDate=todayStr(); plan.active=true;
+  if(!state.dietPlans) state.dietPlans=[];
+  state.dietPlans.forEach(p=>p.active=false);
+  state.dietPlans.push(plan);
+  state.activeDietPlan=plan;
+  saveState({profile:true});
+  closeDietPlanModal();
+  renderDietPlanBanner();
+  renderFoodPage();
+  toast('"'+plan.name+'" started! '+plan.days+' days 🥗');
+}
+
+function getDietPlanDay(){
+  const plan=state.activeDietPlan;
+  if(!plan||!plan.active) return null;
+  const dayNum=Math.floor((new Date(todayStr())-new Date(plan.startDate))/86400000)+1;
+  return (dayNum>=1&&dayNum<=plan.days)?dayNum:null;
+}
+
+function getTodaysPlanMeals(){
+  const plan=state.activeDietPlan;
+  if(!plan) return null;
+  const dayNum=getDietPlanDay();
+  if(!dayNum) return null;
+  return plan.rotation[(dayNum-1)%plan.rotation.length];
+}
+
+function renderDietPlanBanner(){
+  const plan=state.activeDietPlan;
+  const banner=document.getElementById('diet-plan-banner');
+  const importBtn=document.getElementById('diet-plan-import-btn');
+  const homeBanner=document.getElementById('home-diet-plan-banner');
+  const homeImportBtn=document.getElementById('home-diet-import-btn');
+  const dayNum=getDietPlanDay();
+  const hasActive=plan&&plan.active&&dayNum;
+
+  if(banner){ banner.style.display=hasActive?'block':'none'; }
+  if(importBtn){ importBtn.style.display=hasActive?'none':'block'; }
+  if(homeBanner){ homeBanner.style.display=hasActive?'block':'none'; }
+  if(homeImportBtn){ homeImportBtn.style.display=hasActive?'none':'block'; }
+  if(!hasActive) return;
+
+  const daysLeft=plan.days-dayNum+1;
+  const statusText='Day '+dayNum+' of '+plan.days+' · '+daysLeft+' day'+(daysLeft!==1?'s':'')+' left';
+  const todayMeals=getTodaysPlanMeals();
+  const preview=todayMeals
+    ?['breakfast','lunch','dinner','snack'].filter(m=>(todayMeals[m]||[]).length>0)
+       .map(m=>todayMeals[m].slice(0,2).join(', ')).join(' · ')
+    :'';
+
+  ['diet-plan-name','home-diet-plan-name'].forEach(id=>{
+    const el=document.getElementById(id); if(el) el.textContent=plan.name;
+  });
+  ['diet-plan-status','home-diet-plan-status'].forEach(id=>{
+    const el=document.getElementById(id); if(el) el.textContent=statusText;
+  });
+  const prevEl=document.getElementById('diet-plan-preview');
+  if(prevEl) prevEl.textContent=preview;
+}
+
+function logTodaysPlan(){
+  const todayMeals=getTodaysPlanMeals();
+  if(!todayMeals){toast('No plan for today');return;}
+  const log=getFoodLog();
+  let count=0,totalKcal=0;
+  ['breakfast','lunch','dinner','snack'].forEach(meal=>{
+    const items=todayMeals[meal]||[];
+    if(!items.length) return;
+    if(!log.meals[meal]) log.meals[meal]=[];
+    items.forEach(str=>{
+      const m=matchPlanFood(str);
+      if(m.matched&&m.food){
+        const g=m.grams||100;
+        log.meals[meal].push({name:m.food.name,grams:g,unit:'g',amount:g,
+          kcal:Math.round(m.food.kcal*g/100),
+          protein:parseFloat((m.food.protein*g/100).toFixed(1)),
+          carbs:parseFloat((m.food.carbs*g/100).toFixed(1)),
+          fat:parseFloat((m.food.fat*g/100).toFixed(1)),
+          fibre:parseFloat((m.food.fibre*g/100).toFixed(1))});
+        totalKcal+=Math.round(m.food.kcal*g/100);
+      } else {
+        log.meals[meal].push({name:str,grams:100,unit:'g',amount:100,kcal:0,protein:0,carbs:0,fat:0,fibre:0});
+      }
+      count++;
+    });
+  });
+  state.foodLog[foodDate]=log;
+  saveState({food:foodDate});
+  renderFoodPage();
+  if(homeMode==='food') renderHomeFoodPanel();
+  toast('Logged '+count+' items · ~'+totalKcal+' kcal 🥗');
+}
+
+function renderDietPlanManager(){
+  const plan=state.activeDietPlan;
+  const div=document.getElementById('diet-plan-manager-content');
+  if(!div) return;
+  if(!plan||!plan.active){
+    div.innerHTML='<div style="text-align:center;padding:20px;color:var(--text3)">No active plan.<br><button onclick="closeDietPlanManager();openDietPlanImport()" class="btn-primary" style="margin-top:12px;padding:11px 20px;font-size:14px">Import a Plan</button></div>';
+    return;
+  }
+  const dayNum=getDietPlanDay();
+  const daysLeft=dayNum?plan.days-dayNum+1:0;
+  const progress=dayNum?Math.round((dayNum/plan.days)*100):100;
+  let html=`<div style="background:var(--surface2);border-radius:12px;padding:14px;margin-bottom:12px">
+    <div style="font-size:10px;font-weight:700;text-transform:uppercase;color:var(--text3);margin-bottom:3px">Plan name</div>
+    <input id="dp-edit-name" value="${plan.name}" style="width:100%;padding:6px 8px;border:1px solid var(--border);border-radius:8px;background:var(--surface);color:var(--text);font-size:14px;font-weight:700;box-sizing:border-box;margin-bottom:8px" oninput="updatePlanField('name',this.value)">
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:10px">
+      <div>
+        <div style="font-size:10px;font-weight:700;text-transform:uppercase;color:var(--text3);margin-bottom:3px">Start date</div>
+        <input type="date" value="${plan.startDate}" style="width:100%;padding:6px 8px;border:1px solid var(--border);border-radius:8px;background:var(--surface);color:var(--text);font-size:12px;box-sizing:border-box" oninput="updatePlanField('startDate',this.value)">
+      </div>
+      <div>
+        <div style="font-size:10px;font-weight:700;text-transform:uppercase;color:var(--text3);margin-bottom:3px">Duration (days)</div>
+        <input type="number" value="${plan.days}" min="1" max="365" style="width:100%;padding:6px 8px;border:1px solid var(--border);border-radius:8px;background:var(--surface);color:var(--text);font-size:12px;box-sizing:border-box" oninput="updatePlanField('days',parseInt(this.value)||14)">
+      </div>
+    </div>
+    ${dayNum?`<div style="font-size:13px;color:var(--red);font-weight:700">Day ${dayNum} of ${plan.days} · ${daysLeft} days left</div>
+    <div style="height:5px;background:var(--border);border-radius:3px;margin-top:6px;overflow:hidden">
+      <div style="height:100%;width:${progress}%;background:var(--red);border-radius:3px"></div>
+    </div>`:`<div style="font-size:13px;color:#22c55e;font-weight:700">Plan completed!</div>`}
+  </div>
+  <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
+    <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--text3)">Day Rotation</div>
+    <button onclick="addPlanDay()" style="background:var(--red);color:#fff;border:none;border-radius:8px;padding:5px 10px;font-size:12px;font-weight:700;cursor:pointer">+ Add Day</button>
+  </div>`;
+  plan.rotation.forEach((day,dayIdx)=>{
+    html+=`<div style="background:var(--surface2);border-radius:10px;padding:10px 12px;margin-bottom:8px">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
+        <div style="font-family:var(--font-cond);font-weight:700;font-size:15px;color:var(--red)">DAY ${day.day}${plan.rotation.length===1?' · repeats daily':''}</div>
+        <button onclick="deletePlanDay(${dayIdx})" style="background:rgba(226,75,74,.1);border:none;color:var(--red);font-size:12px;font-weight:700;cursor:pointer;padding:3px 8px;border-radius:6px">Delete day</button>
+      </div>`;
+    ['breakfast','lunch','dinner','snack'].forEach(meal=>{
+      const items=day[meal]||[];
+      html+=`<div style="margin-bottom:8px">
+        <div style="font-size:10px;font-weight:700;text-transform:uppercase;color:var(--text3);margin-bottom:4px">${meal}</div>
+        ${items.map((item,itemIdx)=>`<div style="display:flex;align-items:center;gap:6px;margin-bottom:4px">
+          <input value="${item.replace(/"/g,'&quot;')}" style="flex:1;min-width:0;padding:5px 8px;border:1px solid var(--border);border-radius:7px;background:var(--surface);color:var(--text);font-size:12px" onchange="updatePlanItem(${dayIdx},'${meal}',${itemIdx},this.value)">
+          <button onclick="deletePlanItem(${dayIdx},'${meal}',${itemIdx})" style="background:none;border:none;color:var(--text3);font-size:18px;cursor:pointer;padding:0 4px;flex-shrink:0;line-height:1">&times;</button>
+        </div>`).join('')}
+        <button onclick="addPlanItem(${dayIdx},'${meal}')" style="background:none;border:1px dashed var(--border);border-radius:7px;padding:4px 10px;font-size:11px;color:var(--text3);cursor:pointer;width:100%;margin-top:2px">+ add item</button>
+      </div>`;
+    });
+    html+=`</div>`;
+  });
+  html+=`<div style="display:flex;gap:8px;margin-top:12px">
+    <button onclick="logTodaysPlan();closeDietPlanManager()" class="btn-primary" style="flex:2;font-size:14px;padding:11px">Log Today</button>
+    <button onclick="endDietPlan()" style="flex:1;background:var(--surface2);border:1px solid var(--border);border-radius:10px;padding:11px;font-size:13px;color:var(--red);font-weight:700;cursor:pointer">Delete Plan</button>
+  </div>
+  <button onclick="closeDietPlanManager();openDietPlanImport()" style="width:100%;margin-top:8px;background:none;border:1px solid var(--border);border-radius:10px;padding:10px;font-size:13px;color:var(--text2);font-weight:600;cursor:pointer">+ Import New Plan</button>`;
+  div.innerHTML=html;
+}
+
+function updatePlanField(field,value){ if(!state.activeDietPlan) return; state.activeDietPlan[field]=value; saveState({profile:true}); renderDietPlanBanner(); }
+function updatePlanItem(dayIdx,meal,itemIdx,value){ if(!state.activeDietPlan) return; state.activeDietPlan.rotation[dayIdx][meal][itemIdx]=value; saveState({profile:true}); }
+function deletePlanItem(dayIdx,meal,itemIdx){ if(!state.activeDietPlan) return; state.activeDietPlan.rotation[dayIdx][meal].splice(itemIdx,1); saveState({profile:true}); renderDietPlanManager(); }
+function addPlanItem(dayIdx,meal){ if(!state.activeDietPlan) return; const item=prompt('Add food item (e.g. "2 idli" or "rice 200g"):',''); if(!item||!item.trim()) return; if(!state.activeDietPlan.rotation[dayIdx][meal]) state.activeDietPlan.rotation[dayIdx][meal]=[]; state.activeDietPlan.rotation[dayIdx][meal].push(item.trim()); saveState({profile:true}); renderDietPlanManager(); }
+function deletePlanDay(dayIdx){ if(!state.activeDietPlan) return; if(state.activeDietPlan.rotation.length<=1){toast('Cannot delete the only day');return;} if(!confirm('Delete Day '+(dayIdx+1)+'?')) return; state.activeDietPlan.rotation.splice(dayIdx,1); state.activeDietPlan.rotation.forEach((d,i)=>d.day=i+1); saveState({profile:true}); renderDietPlanManager(); }
+function addPlanDay(){ if(!state.activeDietPlan) return; const n=state.activeDietPlan.rotation.length+1; state.activeDietPlan.rotation.push({day:n,breakfast:[],lunch:[],dinner:[],snack:[]}); saveState({profile:true}); renderDietPlanManager(); toast('Day '+n+' added'); }
+function endDietPlan(){ if(!confirm('Delete this diet plan?')) return; if(state.activeDietPlan) state.activeDietPlan.active=false; saveState({profile:true}); closeDietPlanManager(); renderDietPlanBanner(); renderFoodPage(); toast('Diet plan deleted'); }
 
 // ─── FOOD TAB SWITCHER ────────────────────────────────────────────────────────
 let _activeFoodTab = 'search';

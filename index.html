@@ -6767,6 +6767,21 @@ function renderWeeklyCoverage(){
 }
 
 // ─── AI WORKOUT REFINEMENT ─────────────────────────────────────────────────────
+
+// ── AI proxy helper ───────────────────────────────────────────────────────────
+async function callAI(prompt, imageBase64=null, imageType=null){
+  const body = { prompt };
+  if(imageBase64){ body.imageBase64=imageBase64; body.imageType=imageType||'image/jpeg'; }
+  const resp = await fetch('/api/ai',{
+    method:'POST',
+    headers:{'Content-Type':'application/json'},
+    body:JSON.stringify(body)
+  });
+  const data = await resp.json();
+  if(data.error) throw new Error(data.error);
+  return data.text||'';
+}
+
 async function openAIRefine(){
   // Build context from current session + last 2 weeks history
   const exercises = state.exercises||[];
@@ -6884,17 +6899,7 @@ Give your response in this EXACT format (keep it concise, use emojis):
 Keep total response under 300 words. Be specific with numbers.`;
 
   try{
-    const resp = await fetch('https://api.anthropic.com/v1/messages',{
-      method:'POST',
-      headers:{'Content-Type':'application/json'},
-      body:JSON.stringify({
-        model:'claude-sonnet-4-20250514',
-        max_tokens:1000,
-        messages:[{role:'user',content:prompt}]
-      })
-    });
-    const data = await resp.json();
-    const text = data.content?.find(c=>c.type==='text')?.text||'Could not generate advice.';
+    const text = await callAI(prompt);
 
     // Render markdown-style response
     const rendered = text
@@ -7500,17 +7505,11 @@ Rules:
 - Be realistic about Indian portions`});
 
   try{
-    const resp = await fetch('https://api.anthropic.com/v1/messages',{
-      method:'POST',
-      headers:{'Content-Type':'application/json'},
-      body:JSON.stringify({
-        model:'claude-sonnet-4-20250514',
-        max_tokens:1000,
-        messages:[{role:'user',content:userContent}]
-      })
-    });
-    const data = await resp.json();
-    const text = data.content?.find(c=>c.type==='text')?.text||'{}';
+    const text = await callAI(
+      typeof userContent==='string'?userContent:userContent.find(c=>c.type==='text')?.text||'',
+      _foodPhotoBase64||null,
+      'image/jpeg'
+    );
     const clean = text.replace(/```json|```/g,'').trim();
     const parsed = JSON.parse(clean);
     renderAIFoodResults(parsed.foods||[]);

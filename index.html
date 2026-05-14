@@ -6537,16 +6537,15 @@ function toggleMuscleChipSS(m){
 }
 
 function selectGuidedSplit(splitName){
+  // Highlight the selected button
   document.querySelectorAll('.ss-split-btn').forEach(b=>{
     const isThis=b.textContent.toLowerCase().includes(splitName.toLowerCase());
     b.style.background=isThis?'var(--red)':'var(--surface2)';
     b.style.color=isThis?'#fff':'var(--text2)';
     b.style.borderColor=isThis?'var(--red)':'var(--border)';
   });
-  const muscles=SPLIT_DAYS[splitName]||[];
-  _ssSelected=new Set(muscles.filter(m=>EXERCISE_DB[m]||m==='Rear Delts'));
-  const genBtn=document.getElementById('ss-generate-btn');
-  if(genBtn){genBtn.disabled=false;genBtn.style.opacity='1';genBtn.textContent='Generate '+splitName+' Day Workout →';}
+  // Directly generate — no need for _ssSelected in guided mode
+  selectAndGenerateSplit(splitName);
 }
 
 // Main entry: select split and generate immediately
@@ -6572,19 +6571,19 @@ function selectAndGenerateSplit(splitName){
 
 // Free choice generate
 function generateSuggestions(){
-  if(_ssMode==='free'&&_ssSelected.size>0){
-    // For free choice, use first matching split or custom generate
+  if(_ssMode==='free'){
+    if(_ssSelected.size===0){ toast('Select at least one muscle group'); return; }
     const muscles=[..._ssSelected];
-    // Find closest split match
-    let bestSplit=null,bestOverlap=0;
+    // Find closest named split
+    let bestSplit=null, bestOverlap=0;
     for(const [split,splitMuscles] of Object.entries(SPLIT_DAYS)){
       const overlap=muscles.filter(m=>splitMuscles.includes(m)).length;
       if(overlap>bestOverlap){bestOverlap=overlap;bestSplit=split;}
     }
-    if(bestSplit&&bestOverlap>=2){
+    if(bestSplit && bestOverlap>=2){
       selectAndGenerateSplit(bestSplit);
     } else {
-      // Custom: generate for selected muscles only
+      // Custom generate for the selected muscles
       _currentSplitName='Custom';
       const generated=[];
       muscles.forEach(muscle=>{
@@ -6592,9 +6591,8 @@ function generateSuggestions(){
         const available=(EXERCISE_DB[dbKey]||[])
           .filter(ex=>muscle!=='Rear Delts'||ex.head?.toLowerCase().includes('rear'))
           .slice(0,3);
-        available.forEach(ex=>generated.push({
-          exercise:ex,muscle,isAnchor:false,sets:buildSets ? [{w:0,r:10,done:false},{w:0,r:10,done:false},{w:0,r:10,done:false}]:[]
-        }));
+        available.forEach(ex=>generated.push({exercise:ex,muscle,isAnchor:false,
+          sets:[{w:0,r:10,done:false},{w:0,r:10,done:false},{w:0,r:10,done:false}]}));
       });
       _ssSuggestions=generated.map(g=>({...g,selected:true,lastPerf:getLastPerformance(g.exercise.name)}));
       document.getElementById('ss-step1').style.display='none';
@@ -6603,7 +6601,8 @@ function generateSuggestions(){
       renderSuggestions();
     }
   } else {
-    toast('Select at least one muscle group');
+    // Guided mode — should have been handled by selectGuidedSplit already
+    toast('Pick a split day above');
   }
 }
 
@@ -6772,11 +6771,23 @@ function renderWeeklyCoverage(){
 async function callAI(prompt, imageBase64=null, imageType=null){
   const body = { prompt };
   if(imageBase64){ body.imageBase64=imageBase64; body.imageType=imageType||'image/jpeg'; }
+  
   const resp = await fetch('/api/ai',{
     method:'POST',
     headers:{'Content-Type':'application/json'},
     body:JSON.stringify(body)
   });
+
+  // Check if we got HTML back (means /api/ai route doesn't exist yet)
+  const contentType = resp.headers.get('content-type')||'';
+  if(!contentType.includes('application/json')){
+    const html = await resp.text();
+    if(html.includes('<!DOCTYPE') || html.includes('<html')){
+      throw new Error('API route /api/ai not found. Upload api/ai.js to your GitHub repo and redeploy Vercel.');
+    }
+    throw new Error('Unexpected response: '+html.slice(0,100));
+  }
+
   const data = await resp.json();
   if(data.error) throw new Error(data.error);
   return data.text||'';
@@ -6916,8 +6927,24 @@ Keep total response under 300 words. Be specific with numbers.`;
         Powered by Claude AI · Based on your last 14 days of training
       </div>`;
   } catch(e){
-    resultDiv.innerHTML='<div style="color:var(--red);padding:12px;font-size:13px">Could not connect to AI. Check your internet connection.</div>';
-    console.warn('AI refine error:',e);
+    const isSetupError = e.message.includes('api/ai.js') || e.message.includes('not found');
+    resultDiv.innerHTML=`
+      <div style="padding:14px;font-size:13px;line-height:1.6">
+        ${isSetupError ? `
+          <div style="font-weight:700;color:var(--red);margin-bottom:8px">⚠ API route not set up yet</div>
+          <div style="color:var(--text2);margin-bottom:10px">You need to upload <code>api/ai.js</code> to GitHub first:</div>
+          <div style="background:var(--surface2);border-radius:8px;padding:10px;font-size:12px;color:var(--text2);line-height:1.8">
+            1. Go to github.com/unexploredadventures365/liftlog<br>
+            2. Click <b>Add file → Create new file</b><br>
+            3. Type filename: <b>api/ai.js</b><br>
+            4. Paste the contents of the api/ai.js file<br>
+            5. Also upload <b>vercel.json</b><br>
+            6. Also add <b>GEMINI_API_KEY</b> in Vercel Settings → Environment Variables<br>
+            7. Vercel will redeploy automatically
+          </div>
+        ` : `<div style="color:var(--red)">Error: ${e.message}</div>`}
+      </div>`;
+    console.warn('AI refine error:', e);
   }
   btn.textContent='🤖 Analyse & Improve My Workout →';
   btn.disabled=false;
@@ -8181,91 +8208,149 @@ async function syncToSupabase(){
 async function syncFromSupabase(){
   if(!_sb || !_sbUser) return;
   setSyncDot('syncing');
+
+  // Snapshot local state BEFORE pulling — so we can merge, not overwrite
+  const localSnapshot = {
+    workoutIds: new Set((state.workoutHistory||[]).map(w=>w.id)),
+    localWorkouts: [...(state.workoutHistory||[])],
+    localExercises: state.exercises ? JSON.parse(JSON.stringify(state.exercises)) : [],
+    exerciseDate: state.exerciseDate,
+    localFoodLog: state.foodLog ? JSON.parse(JSON.stringify(state.foodLog)) : {},
+    localStepLog: state.stepLog ? JSON.parse(JSON.stringify(state.stepLog)) : {},
+    localWeightLog: [...(state.weightLog||[])],
+  };
+
   try{
     const uid = _sbUser.id;
 
-    // Profile
+    // ── Profile ───────────────────────────────────────────────────────────────
     const {data:prof} = await _sb.from('profiles').select('*').eq('id',uid).single();
     if(prof){
       if(prof.cal_profile) state.calProfile = prof.cal_profile;
       if(prof.step_goal)   state.stepGoal   = prof.step_goal;
-      if(prof.streak)      state.streak     = prof.streak;
+      if(prof.streak)      state.streak     = Math.max(state.streak||0, prof.streak||0);
     }
 
-    // Workouts
+    // ── Workouts — MERGE by ID, never overwrite ───────────────────────────────
     const {data:wkts} = await _sb.from('workouts').select('*').eq('user_id',uid).order('date',{ascending:true});
-    if(wkts&&wkts.length){
-      state.workoutHistory = wkts.map(w=>({
-        id:w.id,
-        // Supabase date columns can include timezone offset — always slice to YYYY-MM-DD
-        date: (w.date||'').slice(0,10),
-        exercises:w.exercises||[],
-        totalVolume:w.total_volume||0,
-        totalKcal:w.total_kcal||0,
-        duration:w.duration||0
-      }));
+    if(wkts && wkts.length){
+      // Build map of cloud workouts by ID
+      const cloudById = {};
+      wkts.forEach(w=>{
+        cloudById[w.id] = {
+          id:w.id,
+          date:(w.date||'').slice(0,10),
+          exercises:w.exercises||[],
+          totalVolume:w.total_volume||0,
+          totalKcal:w.total_kcal||0,
+          duration:w.duration||0
+        };
+      });
+      // Build map of local workouts by ID
+      const localById = {};
+      localSnapshot.localWorkouts.forEach(w=>{ localById[w.id]=w; });
+
+      // Merge: union of cloud + local, local wins on conflict (local is newer)
+      const merged = {};
+      // Start with cloud data
+      Object.values(cloudById).forEach(w=>{ merged[w.id]=w; });
+      // Local overwrites cloud (local changes take priority)
+      Object.values(localById).forEach(w=>{ merged[w.id]=w; });
+
+      state.workoutHistory = Object.values(merged)
+        .sort((a,b)=>a.date.localeCompare(b.date));
     }
 
-    // Active session — only restore if it's actually today's session
+    // ── Active session — only pull if local session is empty ──────────────────
     const {data:sess} = await _sb.from('active_session').select('*').eq('user_id',uid).single();
-    if(sess&&sess.exercises&&sess.exercises.length){
+    if(sess && sess.exercises && sess.exercises.length){
       const savedDate = (sess.exercise_date||'').slice(0,10);
       const today = todayStr();
-      if(savedDate===today){
-        // Today's in-progress session — restore it
-        state.exercises = sess.exercises;
-        state.exerciseDate = today;
+      if(savedDate === today){
+        // Only use cloud session if local session is empty
+        const localHasExercises = (localSnapshot.localExercises||[]).length > 0;
+        if(!localHasExercises){
+          state.exercises = sess.exercises;
+          state.exerciseDate = today;
+        }
+        // If local has exercises — keep local (user was mid-workout)
       }
-      // If it's a past date — do NOT load it. Start the day clean.
-      // Past workouts are in workoutHistory, not here.
     }
 
-    // Weight log
+    // ── Weight log — merge by date, local wins ────────────────────────────────
     const {data:wl} = await _sb.from('weight_log').select('*').eq('user_id',uid).order('date');
-    if(wl) state.weightLog = wl.map(e=>({
-      date:(e.date||'').slice(0,10),
-      kg:parseFloat(e.weight_kg),
-      note:e.note||''
-    }));
+    if(wl && wl.length){
+      const localByDate = {};
+      localSnapshot.localWeightLog.forEach(e=>{ localByDate[e.date]=e; });
+      const cloudEntries = wl.map(e=>({
+        date:(e.date||'').slice(0,10),
+        kg:parseFloat(e.weight_kg),
+        note:e.note||''
+      }));
+      // Merge: cloud fills gaps, local wins on same date
+      const merged = {};
+      cloudEntries.forEach(e=>{ merged[e.date]=e; });
+      Object.values(localByDate).forEach(e=>{ merged[e.date]=e; }); // local wins
+      state.weightLog = Object.values(merged).sort((a,b)=>a.date.localeCompare(b.date));
+    }
 
-    // Food log
+    // ── Food log — merge by date, local wins for today ────────────────────────
     const {data:fl} = await _sb.from('food_log').select('*').eq('user_id',uid);
     if(fl){
-      state.foodLog = {};
+      const today = todayStr();
+      const merged = {};
+      // Start with cloud
       fl.forEach(r=>{
         const d=(r.date||'').slice(0,10);
-        if(d) state.foodLog[d] = {meals:r.meals||{}, water:r.water_ml||0};
+        if(d) merged[d] = {meals:r.meals||{}, water:r.water_ml||0};
       });
+      // Local wins for all dates that exist locally
+      Object.entries(localSnapshot.localFoodLog).forEach(([date, log])=>{
+        merged[date] = log; // local always wins
+      });
+      state.foodLog = merged;
     }
 
-    // Step log
+    // ── Step log — merge by date, local wins ──────────────────────────────────
     const {data:sl} = await _sb.from('step_log').select('*').eq('user_id',uid);
     if(sl){
-      state.stepLog = {};
+      const merged = {...localSnapshot.localStepLog}; // start with local
       sl.forEach(r=>{
         const d=(r.date||'').slice(0,10);
-        if(d) state.stepLog[d] = r.steps||0;
+        if(d && !merged[d]) merged[d] = r.steps||0; // cloud fills gaps only
       });
+      state.stepLog = merged;
     }
 
-    // Exercise memory
+    // ── Exercise memory — merge keys, keep higher count ───────────────────────
     const {data:em} = await _sb.from('exercise_memory').select('*').eq('user_id',uid).single();
-    if(em&&em.memory) {
-      state.exerciseMemory = em.memory;
+    if(em && em.memory){
+      const local = state.exerciseMemory||{};
+      const cloud = em.memory;
+      const merged = {...cloud};
+      Object.entries(local).forEach(([k,v])=>{
+        if(!merged[k]) merged[k]=v;
+        else merged[k].count = Math.max(merged[k].count||0, v.count||0);
+      });
+      state.exerciseMemory = merged;
     }
 
-    // Custom foods
+    // ── Custom foods — union, no duplicates ───────────────────────────────────
     const {data:cfd} = await _sb.from('custom_foods').select('*').eq('user_id',uid);
-    if(cfd&&cfd.length){
-      state.customFoods = cfd.map(r=>r.food_data);
-      state.customFoods.forEach(f=>{
-        if(!FOOD_DB.find(x=>x.name===f.name)) FOOD_DB.push(f);
+    if(cfd && cfd.length){
+      const existing = new Set((state.customFoods||[]).map(f=>f.name));
+      cfd.forEach(r=>{
+        if(!existing.has(r.food_data?.name)){
+          state.customFoods = state.customFoods||[];
+          state.customFoods.push(r.food_data);
+          existing.add(r.food_data?.name);
+        }
+        if(!FOOD_DB.find(x=>x.name===r.food_data?.name)) FOOD_DB.push(r.food_data);
       });
     }
 
-    // Save to localStorage as offline cache (use original to avoid triggering upload)
+    // Save merged state to localStorage
     _origSaveState();
-    // Re-inject custom exercises into library from updated memory + history
     loadCustomExercisesIntoDB();
     _lastSyncTime = new Date();
     setSyncDot('ok');
@@ -8273,8 +8358,7 @@ async function syncFromSupabase(){
   } catch(e){
     console.warn('Fetch error:',e);
     setSyncDot('error');
-    // Fall back to localStorage
-    loadState();
+    loadState(); // fall back to localStorage only
   }
 }
 

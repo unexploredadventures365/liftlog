@@ -1,0 +1,1547 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="theme-color" content="#E24B4A">
+<title>LiftLog</title>
+<!-- Telegram Mini App SDK — required for running inside Telegram -->
+<script src="https://telegram.org/js/telegram-web-app.js"></script>
+<!-- Supabase JS SDK -->
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@400;600;700;900&family=Barlow:wght@400;500;600&display=swap" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+<!-- LiftLog app scripts — defer ensures correct order + DOM ready before execution -->
+<script src="js/db.js" defer></script>
+<script src="js/state.js" defer></script>
+<script src="js/workout.js" defer></script>
+<script src="js/food.js" defer></script>
+<script src="js/ui.js" defer></script>
+<script src="js/sync.js" defer></script>
+<style>
+*{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
+:root{
+  --red:#E24B4A;--red-bg:#FCEBEB;--red-dark:#A32D2D;
+  --green:#3B6D11;--green-bg:#EAF3DE;
+  --blue:#185FA5;--blue-bg:#E6F1FB;
+  --font-cond:'Barlow Condensed',sans-serif;--font-body:'Barlow',sans-serif;
+  --bg:#f7f5f0;--surface:#ffffff;--surface2:#f1efe8;
+  --border:rgba(0,0,0,0.1);--text:#2c2c2a;--text2:#888780;--text3:#b4b2a9;
+  --radius:12px;--radius-sm:8px;
+}
+@media(prefers-color-scheme:dark){:root{
+  --bg:#1a1a18;--surface:#242422;--surface2:#2e2e2b;
+  --border:rgba(255,255,255,0.1);--text:#f1efe8;--text2:#888780;--text3:#5f5e5a;
+}}
+html,body{height:100%;background:var(--bg);color:var(--text);font-family:var(--font-body);font-size:16px;overflow-x:hidden}
+.app{max-width:500px;margin:0 auto;min-height:100vh;padding-bottom:80px}
+@supports(padding-bottom:env(safe-area-inset-bottom)){.app{padding-bottom:calc(80px + env(safe-area-inset-bottom))}}
+.header{padding:1rem 1rem 0.6rem;display:flex;align-items:center;justify-content:space-between;position:sticky;top:0;z-index:200;background:var(--bg)}
+.burger-btn{width:40px;height:40px;border-radius:10px;border:1px solid var(--border);background:var(--surface);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:5px;cursor:pointer;flex-shrink:0}
+.burger-line{width:18px;height:2px;border-radius:1px;background:var(--text);transition:all .25s}
+.burger-btn.open .burger-line:nth-child(1){transform:translateY(7px) rotate(45deg)}
+.burger-btn.open .burger-line:nth-child(2){opacity:0;transform:scaleX(0)}
+.burger-btn.open .burger-line:nth-child(3){transform:translateY(-7px) rotate(-45deg)}
+/* DRAWER */
+.drawer-overlay{position:fixed;inset:0;background:rgba(0,0,0,0);z-index:150;pointer-events:none;transition:background .3s}
+.drawer-overlay.open{background:rgba(0,0,0,0.45);pointer-events:all}
+.drawer{position:fixed;top:0;right:0;bottom:0;width:280px;background:var(--surface);z-index:160;transform:translateX(100%);transition:transform .3s cubic-bezier(.4,0,.2,1);display:flex;flex-direction:column;overflow-y:auto}
+.drawer.open{transform:translateX(0)}
+.drawer-header{padding:1.2rem 1rem 1rem;display:flex;align-items:center;justify-content:space-between;border-bottom:1px solid var(--border);flex-shrink:0}
+.drawer-logo{font-family:var(--font-cond);font-weight:900;font-size:24px;text-transform:uppercase;letter-spacing:-0.5px}
+.drawer-logo span{color:var(--red)}
+.drawer-close{width:32px;height:32px;border-radius:8px;border:1px solid var(--border);background:var(--surface2);cursor:pointer;font-size:18px;color:var(--text2);display:flex;align-items:center;justify-content:center}
+.drawer-section-label{font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:1.5px;color:var(--text3);padding:14px 16px 6px}
+.drawer-item{display:flex;align-items:center;gap:12px;padding:12px 16px;cursor:pointer;border-radius:10px;margin:0 8px 2px;transition:background .15s;border:none;background:transparent;width:calc(100% - 16px);text-align:left}
+.drawer-item:active,.drawer-item.active{background:var(--red-bg)}
+.drawer-item.active .drawer-item-label{color:var(--red)}
+.drawer-item.active .drawer-item-icon{background:var(--red);color:#fff}
+.drawer-item-icon{width:36px;height:36px;border-radius:9px;background:var(--surface2);display:flex;align-items:center;justify-content:center;font-size:17px;flex-shrink:0;transition:all .15s}
+.drawer-item-label{font-family:var(--font-cond);font-weight:700;font-size:17px;text-transform:uppercase;letter-spacing:.5px;color:var(--text)}
+.drawer-item-sub{font-size:11px;color:var(--text3);font-weight:500;margin-top:1px}
+/* current page pill in header */
+.current-page-label{font-family:var(--font-cond);font-weight:700;font-size:18px;text-transform:uppercase;letter-spacing:.5px;color:var(--text)}
+.logo{font-family:var(--font-cond);font-weight:900;font-size:30px;text-transform:uppercase;color:var(--text);letter-spacing:-0.5px}
+.page{display:none;padding:1rem}
+.page.active{display:block}
+.section-title{font-family:var(--font-cond);font-weight:700;font-size:12px;letter-spacing:1.5px;text-transform:uppercase;color:var(--text2);margin-bottom:8px}
+.card{background:var(--surface);border-radius:var(--radius);border:1px solid var(--border);padding:14px;margin-bottom:10px}
+.stat-row{display:grid;grid-template-columns:repeat(4,1fr);gap:6px;margin-bottom:10px}
+.stat{background:var(--surface2);border-radius:var(--radius-sm);padding:10px 8px;text-align:center}
+.stat-val{font-family:var(--font-cond);font-weight:900;font-size:26px;color:var(--text)}
+.stat-lbl{font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:.6px;color:var(--text3);margin-top:2px}
+.input-row{display:flex;gap:8px;align-items:center;margin-bottom:8px}
+.input-row label{font-size:13px;font-weight:600;color:var(--text2);min-width:90px}
+.inp{padding:8px 10px;border:1px solid var(--border);border-radius:var(--radius-sm);font-family:var(--font-body);font-size:14px;font-weight:500;background:var(--surface2);color:var(--text);flex:1;-webkit-appearance:none}
+.inp:focus{outline:none;border-color:var(--red)}
+select.inp{cursor:pointer}
+.btn-primary{width:100%;padding:14px;border-radius:var(--radius);border:none;background:var(--red);color:#fff;font-family:var(--font-cond);font-weight:900;font-size:17px;letter-spacing:1px;text-transform:uppercase;cursor:pointer;transition:opacity .15s;margin-top:6px}
+.btn-primary:active{opacity:.85}
+.btn-outline{padding:8px 14px;border-radius:var(--radius-sm);border:1px solid var(--border);background:transparent;font-family:var(--font-body);font-size:13px;font-weight:600;color:var(--text2);cursor:pointer;transition:all .15s}
+.btn-outline:active{background:var(--surface2)}
+.btn-sm{padding:5px 12px;border-radius:20px;border:1px solid var(--border);background:var(--surface2);font-size:12px;font-weight:600;color:var(--text2);cursor:pointer}
+.btn-danger{background:var(--red-bg) !important;color:var(--red-dark) !important;border-color:transparent !important}
+.ex-card{background:var(--surface);border-radius:var(--radius);border:1px solid var(--border);margin-bottom:10px;overflow:hidden}
+.ex-header{display:flex;align-items:center;justify-content:space-between;padding:12px 14px;cursor:pointer;user-select:none}
+.ex-name{font-family:var(--font-cond);font-weight:700;font-size:20px;text-transform:uppercase;color:var(--text)}
+.ex-meta{font-size:12px;color:var(--text2);margin-top:2px}
+.ex-chevron{font-size:16px;color:var(--text3);transition:transform .2s}
+.ex-chevron.open{transform:rotate(180deg)}
+.sets-table{width:100%;border-collapse:collapse}
+.sets-table th{font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.8px;color:var(--text3);padding:7px 12px;background:var(--surface2);text-align:center;border-top:1px solid var(--border)}
+.sets-table th:first-child{text-align:left}
+.sets-table td{padding:8px 12px;text-align:center;border-top:1px solid var(--border)}
+.set-num{text-align:left!important;font-size:13px;font-weight:600;color:var(--text2)}
+.set-inp{width:55px;padding:5px;border:1px solid var(--border);border-radius:6px;text-align:center;font-family:var(--font-body);font-weight:600;font-size:14px;background:var(--surface2);color:var(--text);-webkit-appearance:none}
+.set-inp:focus{outline:none;border-color:var(--red)}
+.done-btn{width:32px;height:32px;border-radius:50%;border:2px solid var(--border);background:transparent;cursor:pointer;font-size:15px;color:var(--text3);display:flex;align-items:center;justify-content:center;margin:0 auto;transition:all .2s;font-weight:700}
+.done-btn.done{background:var(--red);border-color:var(--red);color:#fff;transform:scale(1.1)}
+.add-set-row{padding:8px 12px;border-top:1px solid var(--border)}
+.add-set-btn{width:100%;padding:7px;border:1px dashed var(--border);border-radius:8px;background:transparent;color:var(--text3);font-family:var(--font-body);font-size:13px;font-weight:500;cursor:pointer}
+.pill-row{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:12px}
+.pill{padding:5px 14px;border-radius:20px;border:1px solid var(--border);font-size:12px;font-weight:600;cursor:pointer;color:var(--text2);background:var(--surface2);transition:all .15s}
+.pill.active{background:var(--red);border-color:var(--red);color:#fff}
+.w-row{display:flex;align-items:center;justify-content:space-between;padding:9px 0;border-top:1px solid var(--border)}
+.w-date{font-size:12px;color:var(--text3)}
+.w-val{font-family:var(--font-cond);font-weight:700;font-size:18px;color:var(--text)}
+.delta{font-size:12px;font-weight:700;padding:2px 8px;border-radius:10px}
+.delta-up{background:var(--red-bg);color:var(--red-dark)}
+.delta-down{background:var(--green-bg);color:var(--green)}
+.result-box{border-radius:var(--radius);padding:18px;text-align:center;background:var(--surface2);margin-bottom:10px}
+.big-num{font-family:var(--font-cond);font-weight:900;font-size:64px;line-height:1}
+.age-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:10px}
+.age-box{border-radius:10px;padding:12px;text-align:center}
+.age-box.neutral{background:var(--blue-bg);color:var(--blue)}
+.age-box.good{background:var(--green-bg);color:var(--green)}
+.age-num{font-family:var(--font-cond);font-weight:900;font-size:32px}
+.age-lbl{font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.8px;margin-top:2px}
+.data-action{display:flex;align-items:center;justify-content:space-between;padding:12px 0;border-top:1px solid var(--border)}
+.data-lbl{font-size:14px;font-weight:600;color:var(--text)}
+.data-sub{font-size:12px;color:var(--text3);margin-top:2px}
+.toast{position:fixed;bottom:90px;left:50%;transform:translateX(-50%);background:var(--text);color:var(--bg);padding:10px 20px;border-radius:20px;font-size:13px;font-weight:600;z-index:999;opacity:0;transition:opacity .3s;pointer-events:none;white-space:nowrap}
+.toast.show{opacity:1}
+.pr-badge{display:inline-block;background:#FAEEDA;color:#633806;font-size:10px;font-weight:700;letter-spacing:.6px;text-transform:uppercase;padding:2px 6px;border-radius:4px;margin-left:8px;vertical-align:middle}
+
+/* VIEW TOGGLE */
+.view-toggle{display:flex;gap:6px;margin-bottom:10px}
+.view-btn{flex:1;padding:7px;border-radius:var(--radius-sm);border:1px solid var(--border);background:transparent;font-family:var(--font-cond);font-weight:700;font-size:13px;letter-spacing:.5px;text-transform:uppercase;color:var(--text3);cursor:pointer;transition:all .15s}
+.view-btn.active{background:var(--red);border-color:var(--red);color:#fff}
+
+/* DAY BAR */
+.day-bar{display:flex;gap:3px;margin-bottom:10px}
+.day{flex:1;text-align:center;cursor:pointer;padding:5px 2px;border-radius:8px;border:1.5px solid transparent;transition:all .15s}
+.day-lbl{font-size:10px;font-weight:700;color:var(--text3);text-transform:uppercase;margin-bottom:2px}
+.day-num{font-size:12px;color:var(--text2);margin-bottom:4px;font-weight:500}
+.day-dot{width:100%;height:4px;border-radius:2px;background:var(--border)}
+.day.done .day-dot{background:var(--red)}
+.day.today .day-lbl,.day.today .day-num{color:var(--red);font-weight:900}
+.day.selected{border-color:var(--red);background:var(--red-bg)}
+
+/* CALENDAR */
+.cal-nav{display:flex;align-items:center;justify-content:space-between;margin-bottom:10px}
+.cal-month{font-family:var(--font-cond);font-weight:700;font-size:18px;text-transform:uppercase;color:var(--text)}
+.cal-nav-btn{width:32px;height:32px;border-radius:50%;border:1px solid var(--border);background:transparent;font-size:18px;cursor:pointer;color:var(--text2);display:flex;align-items:center;justify-content:center;line-height:1}
+.cal-grid{display:grid;grid-template-columns:repeat(7,1fr);gap:3px;margin-bottom:4px}
+.cal-dow{font-size:10px;font-weight:700;text-transform:uppercase;color:var(--text3);text-align:center;padding:4px 0}
+.cal-day{aspect-ratio:1;border-radius:8px;display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:500;cursor:pointer;color:var(--text2);transition:all .15s;border:1.5px solid transparent}
+.cal-day.has-workout{background:var(--red-bg);color:var(--red-dark);font-weight:700}
+.cal-day.today{border-color:var(--red);color:var(--red);font-weight:700}
+.cal-day.selected{background:var(--red) !important;color:#fff !important;font-weight:700}
+.cal-day.other-month{opacity:0.3;cursor:default}
+
+/* DAY DETAIL */
+.day-detail{background:var(--surface);border-radius:var(--radius);border:1px solid var(--border);margin-bottom:10px;overflow:hidden}
+.day-detail-hdr{display:flex;align-items:center;justify-content:space-between;padding:12px 14px;border-bottom:1px solid var(--border);background:var(--surface2)}
+.day-detail-date{font-family:var(--font-cond);font-weight:700;font-size:17px;text-transform:uppercase;color:var(--text)}
+.detail-ex{padding:10px 14px;border-top:1px solid var(--border)}
+.detail-ex-name{font-family:var(--font-cond);font-weight:700;font-size:16px;text-transform:uppercase;color:var(--text);margin-bottom:5px}
+.detail-set-chip{display:inline-block;margin:2px 4px 2px 0;padding:3px 10px;border-radius:12px;background:var(--surface2);font-size:12px;font-weight:600;color:var(--text2)}
+.kcal-badge{display:inline-flex;align-items:center;gap:4px;padding:3px 9px;border-radius:12px;background:#FAEEDA;color:#633806;font-size:11px;font-weight:700;margin-left:6px;vertical-align:middle}
+.cal-row{display:flex;align-items:center;justify-content:space-between;padding:9px 0;border-top:1px solid var(--border)}
+.cal-bar-wrap{height:6px;background:var(--surface2);border-radius:3px;flex:1;margin:0 10px}
+.cal-bar-fill{height:6px;border-radius:3px;background:var(--red);transition:width .4s}
+
+/* EXERCISE LIBRARY MODAL */
+.modal-overlay{position:fixed;inset:0;background:rgba(0,0,0,0.55);z-index:500;display:flex;flex-direction:column;justify-content:flex-end}
+.modal-sheet{background:var(--bg);border-radius:20px 20px 0 0;max-height:92vh;display:flex;flex-direction:column;overflow:visible}
+.modal-handle{width:40px;height:4px;border-radius:2px;background:var(--border);margin:10px auto 0}
+.modal-header{padding:12px 16px 10px;display:flex;align-items:center;justify-content:space-between;border-bottom:1px solid var(--border)}
+.modal-title{font-family:var(--font-cond);font-weight:700;font-size:20px;text-transform:uppercase;color:var(--text)}
+.modal-close{width:30px;height:30px;border-radius:50%;border:none;background:var(--surface2);font-size:18px;cursor:pointer;color:var(--text2);display:flex;align-items:center;justify-content:center}
+.lib-search{padding:8px 16px;border-bottom:1px solid var(--border)}
+.lib-search input{width:100%;padding:9px 12px;border:1px solid var(--border);border-radius:10px;background:var(--surface2);color:var(--text);font-size:14px;font-family:var(--font-body)}
+.lib-search input:focus{outline:none;border-color:var(--red)}
+.lib-muscles{display:flex;gap:6px;padding:8px 16px;overflow-x:auto;scrollbar-width:none;border-bottom:1px solid var(--border)}
+.lib-muscles::-webkit-scrollbar{display:none}
+.muscle-chip{flex-shrink:0;padding:5px 12px;border-radius:20px;border:1px solid var(--border);font-size:12px;font-weight:700;cursor:pointer;color:var(--text2);background:var(--surface2);white-space:nowrap;transition:all .15s}
+.muscle-chip.active{background:var(--red);border-color:var(--red);color:#fff}
+.lib-list{overflow-y:auto;flex:1;padding:8px 0}
+.lib-item{display:flex;align-items:center;gap:12px;padding:10px 16px;cursor:pointer;border-bottom:1px solid var(--border);transition:background .1s}
+.lib-item:active{background:var(--surface2)}
+.lib-svg-icon{width:64px;height:64px;border-radius:10px;background:var(--surface2);flex-shrink:0;display:flex;align-items:center;justify-content:center;overflow:hidden;padding:2px}
+.lib-svg-icon svg{width:60px;height:60px}
+@media(prefers-color-scheme:dark){.lib-svg-icon svg line,.lib-svg-icon svg circle,.lib-svg-icon svg rect{filter:brightness(2)}}
+.lib-info{flex:1;min-width:0}
+.lib-name{font-family:var(--font-cond);font-weight:700;font-size:16px;text-transform:uppercase;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.lib-muscle-tag{font-size:11px;color:var(--text3);font-weight:600;margin-top:2px}
+.lib-kcal{font-size:12px;font-weight:700;color:var(--red);white-space:nowrap}
+.lib-add-btn{width:32px;height:32px;border-radius:50%;background:var(--red);border:none;color:#fff;font-size:20px;cursor:pointer;display:flex;align-items:center;justify-content:center;flex-shrink:0}
+.muscle-section-hdr{padding:8px 16px 4px;font-family:var(--font-cond);font-weight:700;font-size:11px;letter-spacing:1.5px;text-transform:uppercase;color:var(--text3);background:var(--surface2)}
+.lib-loading{text-align:center;padding:40px;color:var(--text3);font-size:14px}
+/* REST TIMER OVERLAY */
+.rest-overlay{position:fixed;bottom:90px;left:50%;transform:translateX(-50%);background:var(--text);color:var(--bg);border-radius:20px;padding:10px 20px;display:flex;align-items:center;gap:12px;z-index:300;box-shadow:0 4px 24px rgba(0,0,0,.3);transition:opacity .3s}
+.rest-overlay.hidden{opacity:0;pointer-events:none}
+.rest-ring{width:44px;height:44px;position:relative;flex-shrink:0}
+.rest-ring svg{transform:rotate(-90deg)}
+.rest-ring-num{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;font-family:var(--font-cond);font-weight:900;font-size:16px}
+.rest-label{font-size:13px;font-weight:700}
+.rest-skip{background:transparent;border:1px solid rgba(255,255,255,.3);color:inherit;border-radius:10px;padding:4px 10px;font-size:12px;font-weight:700;cursor:pointer}
+/* RPE STARS */
+.rpe-row{display:flex;align-items:center;gap:4px;padding:4px 12px 8px}
+.rpe-label{font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.6px;color:var(--text3);margin-right:4px}
+.rpe-dot{width:18px;height:18px;border-radius:50%;border:1.5px solid var(--border);background:var(--surface2);cursor:pointer;transition:all .15s;font-size:9px;display:flex;align-items:center;justify-content:center;color:var(--text3);font-weight:700}
+.rpe-dot.active{background:var(--red);border-color:var(--red);color:#fff}
+/* SUPERSET */
+.superset-badge{display:inline-flex;align-items:center;gap:3px;padding:2px 7px;border-radius:10px;font-size:10px;font-weight:700;letter-spacing:.5px;text-transform:uppercase;margin-left:6px}
+.ss-A{background:#E6F1FB;color:#185FA5}
+.ss-B{background:#EAF3DE;color:#3B6D11}
+.ss-C{background:#FAEEDA;color:#633806}
+.ex-card.is-superset{border-left:3px solid var(--red)}
+/* PLATE CALCULATOR */
+.plate-chip{display:inline-flex;align-items:center;justify-content:center;width:36px;height:36px;border-radius:50%;font-size:11px;font-weight:900;color:#fff;flex-shrink:0}
+.plates-row{display:flex;flex-wrap:wrap;gap:6px;align-items:center;margin-top:8px}
+/* PROGRAMS PAGE */
+.prog-card{background:var(--surface);border-radius:var(--radius);border:1px solid var(--border);padding:14px;margin-bottom:10px;cursor:pointer;transition:border-color .15s}
+.prog-card:active{border-color:var(--red)}
+.prog-card.active-prog{border-color:var(--red);background:var(--red-bg)}
+.prog-title{font-family:var(--font-cond);font-weight:900;font-size:20px;text-transform:uppercase}
+.prog-sub{font-size:12px;color:var(--text2);margin-top:3px}
+.prog-tag{display:inline-block;padding:2px 8px;border-radius:8px;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;background:var(--surface2);color:var(--text3);margin-right:4px;margin-top:6px}
+.day-chip{display:inline-flex;align-items:center;gap:4px;padding:5px 10px;border-radius:20px;font-size:12px;font-weight:700;background:var(--surface2);color:var(--text2);margin:3px;cursor:pointer;border:1.5px solid transparent}
+.day-chip.active{background:var(--red);color:#fff;border-color:var(--red)}
+/* HALL OF FAME */
+.pr-row{display:flex;align-items:center;gap:10px;padding:10px 0;border-top:1px solid var(--border)}
+.pr-medal{width:32px;height:32px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:16px;flex-shrink:0}
+.pr-gold{background:#FFF3CD}
+.pr-silver{background:#F1F1F1}
+.pr-bronze{background:#FAEEDA}
+.pr-name{font-family:var(--font-cond);font-weight:700;font-size:16px;text-transform:uppercase;color:var(--text)}
+.pr-detail{font-size:11px;color:var(--text3);margin-top:1px}
+.pr-val{font-family:var(--font-cond);font-weight:900;font-size:20px;color:var(--red);margin-left:auto}
+/* MUSCLE HEATMAP */
+.heatmap-wrap{display:flex;gap:12px;align-items:flex-start;justify-content:center;padding:8px 0}
+.heatmap-svg{flex:1;max-width:180px}
+.heatmap-legend{font-size:11px;color:var(--text3);line-height:1.8}
+.heatmap-legend-item{display:flex;align-items:center;gap:6px}
+.heatmap-swatch{width:12px;height:12px;border-radius:3px}
+/* STEPS */
+.step-goal-chip{padding:5px 12px;border-radius:16px;border:1px solid var(--border);font-size:12px;font-weight:700;cursor:pointer;color:var(--text2);background:var(--surface2);white-space:nowrap;transition:all .15s}
+.step-goal-chip.active{background:var(--red);border-color:var(--red);color:#fff}
+.step-bar-row{display:flex;align-items:center;gap:8px;margin-bottom:7px}
+.step-bar-day{font-size:11px;font-weight:700;color:var(--text3);width:28px;flex-shrink:0}
+.step-bar-track{flex:1;height:18px;background:var(--surface2);border-radius:9px;overflow:hidden;position:relative}
+.step-bar-fill{height:18px;border-radius:9px;background:linear-gradient(90deg,var(--red),#f97316);transition:width .5s}
+.step-bar-val{font-size:11px;font-weight:700;color:var(--text2);width:44px;text-align:right;flex-shrink:0}
+.home-mode-toggle{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:14px}
+.home-mode-btn{display:flex;flex-direction:column;align-items:center;gap:5px;padding:14px 8px;border-radius:var(--radius);border:2px solid var(--border);background:var(--surface);cursor:pointer;transition:all .2s;font-family:var(--font-body)}
+.home-mode-btn.active{border-color:var(--red);background:var(--red-bg)}
+.home-mode-btn.active .home-mode-label{color:var(--red)}
+.home-mode-icon{font-size:28px;line-height:1}
+.home-mode-label{font-family:var(--font-cond);font-weight:700;font-size:15px;text-transform:uppercase;letter-spacing:.5px;color:var(--text2);transition:color .2s}
+.food-meal-btn{padding:5px 10px;border-radius:20px;border:1px solid var(--border);background:var(--surface2);font-size:11px;font-weight:700;cursor:pointer;color:var(--text2);white-space:nowrap;flex-shrink:0;transition:all .15s}
+.food-meal-btn.active{background:var(--red);border-color:var(--red);color:#fff}
+.food-item{display:flex;align-items:center;gap:10px;padding:10px 16px;border-bottom:1px solid var(--border);cursor:pointer;transition:background .1s}
+.food-item:active{background:var(--surface2)}
+.food-item-name{font-family:var(--font-cond);font-weight:700;font-size:15px;text-transform:uppercase;color:var(--text)}
+.food-item-meta{font-size:11px;color:var(--text3);margin-top:2px}
+.food-item-kcal{font-family:var(--font-cond);font-weight:900;font-size:18px;color:var(--red);flex-shrink:0}
+.food-cat-chip{flex-shrink:0;padding:4px 10px;border-radius:16px;border:1px solid var(--border);font-size:11px;font-weight:700;cursor:pointer;color:var(--text2);background:var(--surface2);white-space:nowrap;transition:all .15s}
+.food-cat-chip.active{background:var(--red);border-color:var(--red);color:#fff}
+.macro-bar-row{margin-bottom:7px}
+.macro-bar-label{display:flex;justify-content:space-between;font-size:12px;font-weight:600;color:var(--text2);margin-bottom:3px}
+.macro-bar-track{height:7px;background:var(--surface2);border-radius:4px;overflow:hidden}
+.macro-bar-fill{height:7px;border-radius:4px;transition:width .4s}
+.micro-item{display:flex;flex-direction:column;gap:2px}
+.micro-label{font-size:10px;font-weight:600;color:var(--text3)}
+.micro-bar-track{height:5px;background:var(--surface2);border-radius:3px;overflow:hidden}
+.micro-bar-fill{height:5px;border-radius:3px;transition:width .5s}
+.water-glass{width:32px;height:32px;border-radius:8px;border:2px solid var(--border);background:var(--surface2);cursor:pointer;display:flex;align-items:center;justify-content:center;font-size:16px;transition:all .15s}
+.water-glass.filled{background:#E6F1FB;border-color:#185FA5}
+.meal-section{margin-bottom:12px}
+.meal-section-hdr{font-family:var(--font-cond);font-weight:700;font-size:13px;text-transform:uppercase;letter-spacing:1px;color:var(--text2);padding:6px 0;border-bottom:1px solid var(--border);margin-bottom:6px;display:flex;justify-content:space-between}
+.logged-food-row{display:flex;align-items:center;justify-content:space-between;padding:8px 0;border-bottom:1px solid var(--border)}
+.logged-food-name{font-size:13px;font-weight:600;color:var(--text)}
+.logged-food-detail{font-size:11px;color:var(--text3);margin-top:1px}
+.food-section-hdr{padding:6px 16px 2px;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:1.2px;color:var(--text3);background:var(--surface2)}
+.prog-ex-item{display:flex;align-items:center;justify-content:space-between;padding:11px 14px;background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-sm);margin-bottom:6px;cursor:pointer;transition:border-color .15s}
+.prog-ex-item:active,.prog-ex-item.selected{border-color:var(--red);background:var(--red-bg)}
+.prog-ex-item.selected .prog-ex-name{color:var(--red)}
+.prog-ex-name{font-family:var(--font-cond);font-weight:700;font-size:16px;text-transform:uppercase;color:var(--text)}
+.prog-ex-meta{font-size:11px;color:var(--text3);margin-top:2px}
+.prog-ex-pr{font-family:var(--font-cond);font-weight:900;font-size:18px;color:var(--text);text-align:right}
+.prog-ex-pr-lbl{font-size:10px;color:var(--text3);font-weight:600;text-transform:uppercase;text-align:right}
+.prog-muscle-chip{flex-shrink:0;padding:5px 12px;border-radius:20px;border:1px solid var(--border);font-size:12px;font-weight:700;cursor:pointer;color:var(--text2);background:var(--surface2);white-space:nowrap;transition:all .15s}
+.prog-muscle-chip.active{background:var(--red);border-color:var(--red);color:#fff}
+.prog-section-hdr{font-family:var(--font-cond);font-weight:700;font-size:11px;letter-spacing:1.5px;text-transform:uppercase;color:var(--text3);padding:10px 4px 5px;border-bottom:1px solid var(--border);margin-bottom:6px}
+.report-row{display:flex;justify-content:space-between;padding:8px 0;border-top:1px solid var(--border);font-size:13px}
+.report-row strong{font-weight:700;color:var(--text)}
+/* 1RM */
+.strength-bar{height:8px;border-radius:4px;background:var(--surface2);margin:4px 0 8px;overflow:hidden}
+.strength-fill{height:8px;border-radius:4px;background:linear-gradient(90deg,var(--red),#f97316);transition:width .6s}
+.strength-label{display:flex;justify-content:space-between;font-size:11px;color:var(--text3);font-weight:600}
+/* COPY WORKOUT BTN */
+.copy-workout-btn{display:flex;align-items:center;gap:6px;padding:8px 12px;border-radius:var(--radius-sm);border:1px dashed var(--border);background:transparent;color:var(--text2);font-size:13px;font-weight:600;cursor:pointer;width:100%;justify-content:center;margin-bottom:8px}
+.copy-workout-btn:active{background:var(--surface2)}
+/* QUICK ADD */
+.quick-add-wrap{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:10px 12px;margin-bottom:10px}
+.lib-custom-footer{border-top:2px solid var(--border);padding:12px 16px 16px;background:var(--surface);flex-shrink:0}
+.lib-custom-label{font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.8px;color:var(--text3);margin-bottom:8px}
+.lib-custom-row{display:flex;gap:6px;align-items:center}
+.lib-custom-inp{flex:2;padding:9px 10px;border:1px solid var(--border);border-radius:8px;background:var(--surface2);color:var(--text);font-family:var(--font-body);font-size:14px}
+.lib-custom-inp:focus{outline:none;border-color:var(--red)}
+.lib-custom-sel{flex:1;padding:9px 6px;border:1px solid var(--border);border-radius:8px;background:var(--surface2);color:var(--text);font-family:var(--font-body);font-size:13px;cursor:pointer}
+.lib-custom-btn{padding:9px 14px;border-radius:8px;border:none;background:var(--red);color:#fff;font-family:var(--font-cond);font-weight:900;font-size:15px;letter-spacing:.5px;cursor:pointer;white-space:nowrap;flex-shrink:0}
+</style>
+</head>
+<body>
+<div class="app">
+  <!-- DRAWER OVERLAY -->
+  <div class="drawer-overlay" id="drawer-overlay" onclick="closeDrawer()"></div>
+
+  <!-- SIDE DRAWER -->
+  <div class="drawer" id="drawer">
+    <div class="drawer-header">
+      <div class="drawer-logo">LIFT<span>LOG</span></div>
+      <button class="drawer-close" onclick="closeDrawer()">×</button>
+    </div>
+
+    <div class="drawer-section-label">Training</div>
+    <button class="drawer-item active" id="nav-workout" onclick="showPage('workout')">
+      <div class="drawer-item-icon">🏋️</div>
+      <div><div class="drawer-item-label">Workout</div><div class="drawer-item-sub">Today's session</div></div>
+    </button>
+    <button class="drawer-item" id="nav-programs" onclick="showPage('programs')">
+      <div class="drawer-item-icon">📋</div>
+      <div><div class="drawer-item-label">Plans</div><div class="drawer-item-sub">PPL, 5×5, Upper/Lower</div></div>
+    </button>
+
+    <div class="drawer-section-label">Analytics</div>
+    <button class="drawer-item" id="nav-progress" onclick="showPage('progress')">
+      <div class="drawer-item-icon">📈</div>
+      <div><div class="drawer-item-label">Progress</div><div class="drawer-item-sub">Lift history & charts</div></div>
+    </button>
+    <button class="drawer-item" id="nav-records" onclick="showPage('records')">
+      <div class="drawer-item-icon">🏆</div>
+      <div><div class="drawer-item-label">Records</div><div class="drawer-item-sub">PRs & muscle heatmap</div></div>
+    </button>
+    <button class="drawer-item" id="nav-report" onclick="showPage('report')">
+      <div class="drawer-item-icon">📊</div>
+      <div><div class="drawer-item-label">Report</div><div class="drawer-item-sub">Weekly grade & stats</div></div>
+    </button>
+
+    <div class="drawer-section-label">Body</div>
+    <button class="drawer-item" id="nav-calories" onclick="showPage('calories')">
+      <div class="drawer-item-icon">🔥</div>
+      <div><div class="drawer-item-label">Calories</div><div class="drawer-item-sub">Burn tracking</div></div>
+    </button>
+    <button class="drawer-item" id="nav-weight" onclick="showPage('weight')">
+      <div class="drawer-item-icon">⚖️</div>
+      <div><div class="drawer-item-label">Weight</div><div class="drawer-item-sub">Body weight log</div></div>
+    </button>
+    <button class="drawer-item" id="nav-bodyage" onclick="showPage('bodyage')">
+      <div class="drawer-item-icon">🧬</div>
+      <div><div class="drawer-item-label">Body Age</div><div class="drawer-item-sub">Health score</div></div>
+    </button>
+
+    <div class="drawer-section-label">Nutrition</div>
+    <button class="drawer-item" id="nav-food" onclick="showPage('food')">
+      <div class="drawer-item-icon">🍱</div>
+      <div><div class="drawer-item-label">Food & Water</div><div class="drawer-item-sub">Calories, macros & micros</div></div>
+    </button>
+
+    <div class="drawer-section-label">Settings</div>
+    <button class="drawer-item" id="nav-data" onclick="showPage('data')">
+      <div class="drawer-item-icon">💾</div>
+      <div><div class="drawer-item-label">Data</div><div class="drawer-item-sub">Backup & restore</div></div>
+    </button>
+
+    <div style="padding:16px;margin-top:auto;border-top:1px solid var(--border)">
+      <div style="display:flex;align-items:center;gap:8px">
+        <div class="streak-dot" style="width:7px;height:7px;border-radius:50%;background:var(--red);flex-shrink:0"></div>
+        <span style="font-size:13px;font-weight:600;color:var(--text2)"><span id="streak-count">0</span> day streak</span>
+        <span class="save-status" id="save-status" style="margin-left:auto;font-size:11px;color:var(--text3);font-weight:600">✓ Saved</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── AUTH SCREEN ─────────────────────────────────────────── -->
+  <div id="auth-screen" style="display:none;position:fixed;inset:0;background:var(--bg);z-index:9999;overflow-y:auto">
+    <div style="max-width:380px;margin:0 auto;padding:40px 24px">
+      <!-- Logo -->
+      <div style="text-align:center;margin-bottom:32px">
+        <div style="font-family:var(--font-cond);font-weight:900;font-size:48px;letter-spacing:-1px">
+          LIFT<span style="color:var(--red)">LOG</span>
+        </div>
+        <div style="font-size:14px;color:var(--text3);margin-top:4px">Your gym, food & life tracker</div>
+      </div>
+
+      <!-- Tab toggle -->
+      <div style="display:grid;grid-template-columns:1fr 1fr;background:var(--surface2);border-radius:12px;padding:3px;margin-bottom:24px">
+        <button id="auth-tab-login" onclick="setAuthTab('login')"
+          style="padding:10px;border:none;border-radius:10px;font-family:var(--font-cond);font-weight:700;font-size:15px;cursor:pointer;background:var(--red);color:#fff;transition:all .2s">
+          Sign In
+        </button>
+        <button id="auth-tab-signup" onclick="setAuthTab('signup')"
+          style="padding:10px;border:none;border-radius:10px;font-family:var(--font-cond);font-weight:700;font-size:15px;cursor:pointer;background:transparent;color:var(--text2);transition:all .2s">
+          Sign Up
+        </button>
+      </div>
+
+      <!-- Login form -->
+      <div id="auth-form-login">
+        <div style="margin-bottom:12px">
+          <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.8px;color:var(--text3);margin-bottom:5px">Email</div>
+          <input class="inp" id="auth-email" type="email" placeholder="you@example.com" inputmode="email"
+            style="width:100%;font-size:15px" autocomplete="email">
+        </div>
+        <div style="margin-bottom:6px">
+          <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.8px;color:var(--text3);margin-bottom:5px">Password</div>
+          <input class="inp" id="auth-password" type="password" placeholder="••••••••"
+            style="width:100%;font-size:15px" autocomplete="current-password">
+        </div>
+        <!-- Forgot password link -->
+        <div style="text-align:right;margin-bottom:18px">
+          <button onclick="showForgotPassword()" style="background:none;border:none;color:var(--text3);font-size:12px;cursor:pointer;padding:4px">
+            Forgot password?
+          </button>
+        </div>
+        <button class="btn-primary" onclick="authLogin()" id="auth-login-btn" style="width:100%;font-size:16px;padding:14px">
+          Sign In →
+        </button>
+        <!-- OTP option - works inside Telegram -->
+        <button onclick="showOtpForm()" style="width:100%;margin-top:10px;background:none;border:none;color:var(--text3);font-size:13px;cursor:pointer;padding:8px">
+          Sign in with email code instead
+        </button>
+      </div>
+
+      <!-- OTP form — stays inside Telegram -->
+      <div id="auth-form-otp" style="display:none">
+        <div style="background:var(--surface2);border-radius:10px;padding:10px 12px;margin-bottom:14px;font-size:12px;color:var(--text2);line-height:1.5">
+          📧 We'll send a 6-digit code to your email. Enter it here — no need to tap any links.
+        </div>
+        <div style="margin-bottom:12px">
+          <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.8px;color:var(--text3);margin-bottom:5px">Email</div>
+          <input class="inp" id="otp-email" type="email" placeholder="you@example.com" inputmode="email"
+            style="width:100%;font-size:15px" autocomplete="email">
+        </div>
+        <div id="otp-code-section" style="display:none;margin-bottom:12px">
+          <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.8px;color:var(--text3);margin-bottom:5px">6-digit code</div>
+          <input class="inp" id="otp-code" type="number" inputmode="numeric" placeholder="123456"
+            style="width:100%;font-size:20px;letter-spacing:8px;text-align:center">
+        </div>
+        <button class="btn-primary" id="otp-send-btn" onclick="sendOtp()" style="width:100%;font-size:16px;padding:14px">
+          Send Code →
+        </button>
+        <button onclick="showLoginForm()" style="width:100%;margin-top:10px;background:none;border:none;color:var(--text3);font-size:13px;cursor:pointer;padding:8px">
+          ← Back to password sign in
+        </button>
+      </div>
+
+      <!-- Forgot password form -->
+      <div id="auth-form-forgot" style="display:none">
+        <div style="background:var(--surface2);border-radius:10px;padding:10px 12px;margin-bottom:14px;font-size:12px;color:var(--text2);line-height:1.5">
+          🔑 Enter your email and we'll send a password reset link.
+        </div>
+        <div style="margin-bottom:18px">
+          <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.8px;color:var(--text3);margin-bottom:5px">Email</div>
+          <input class="inp" id="forgot-email" type="email" placeholder="you@example.com" inputmode="email"
+            style="width:100%;font-size:15px" autocomplete="email">
+        </div>
+        <button class="btn-primary" onclick="authForgotPassword()" id="forgot-btn" style="width:100%;font-size:16px;padding:14px">
+          Send Reset Link →
+        </button>
+        <button onclick="showLoginForm()" style="width:100%;margin-top:10px;background:none;border:none;color:var(--text3);font-size:13px;cursor:pointer;padding:8px">
+          ← Back to sign in
+        </button>
+      </div>
+
+      <!-- Signup form -->
+      <div id="auth-form-signup" style="display:none">
+        <div style="margin-bottom:12px">
+          <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.8px;color:var(--text3);margin-bottom:5px">Name</div>
+          <input class="inp" id="auth-name" type="text" placeholder="Sai"
+            style="width:100%;font-size:15px" autocomplete="name">
+        </div>
+        <div style="margin-bottom:12px">
+          <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.8px;color:var(--text3);margin-bottom:5px">Email</div>
+          <input class="inp" id="auth-email-signup" type="email" placeholder="you@example.com" inputmode="email"
+            style="width:100%;font-size:15px" autocomplete="email">
+        </div>
+        <div style="margin-bottom:20px">
+          <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.8px;color:var(--text3);margin-bottom:5px">Password (min 6 chars)</div>
+          <input class="inp" id="auth-password-signup" type="password" placeholder="••••••••"
+            style="width:100%;font-size:15px" autocomplete="new-password">
+        </div>
+        <button class="btn-primary" onclick="authSignup()" id="auth-signup-btn" style="width:100%;font-size:16px;padding:14px">
+          Create Account →
+        </button>
+      </div>
+
+      <!-- Error / status message -->
+      <div id="auth-msg" style="margin-top:14px;font-size:13px;text-align:center;color:var(--red);min-height:20px"></div>
+
+      <!-- Offline mode option -->
+      <div style="margin-top:32px;padding-top:24px;border-top:1px solid var(--border);text-align:center">
+        <div style="font-size:12px;color:var(--text3);margin-bottom:8px">Just want to try it out?</div>
+        <button onclick="useOfflineMode()"
+          style="background:none;border:1px solid var(--border);border-radius:10px;padding:10px 20px;color:var(--text2);font-size:13px;font-weight:600;cursor:pointer;width:100%">
+          Continue without account (offline only)
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── SYNC STATUS BAR ───────────────────────────────────────── -->
+  <div id="sync-bar" style="display:none;position:fixed;top:0;left:0;right:0;z-index:200;height:3px;background:var(--red);transition:opacity .5s"></div>
+
+  <!-- HEADER -->
+  <div class="header">
+    <div class="logo">LIFT<span style="color:var(--red)">LOG</span></div>
+    <div style="display:flex;align-items:center;gap:8px">
+      <!-- Sync status dot -->
+      <div id="sync-dot" title="Sync status" style="width:8px;height:8px;border-radius:50%;background:#22c55e;flex-shrink:0;display:none"></div>
+      <div class="current-page-label" id="current-page-label">Workout</div>
+      <!-- User avatar button -->
+      <button id="user-avatar-btn" onclick="toggleUserMenu()" style="display:none;width:30px;height:30px;border-radius:50%;background:var(--red);border:none;cursor:pointer;font-family:var(--font-cond);font-weight:900;font-size:13px;color:#fff;flex-shrink:0" title="Account">?</button>
+      <button class="burger-btn" id="burger-btn" onclick="toggleDrawer()">
+        <div class="burger-line"></div>
+        <div class="burger-line"></div>
+        <div class="burger-line"></div>
+      </button>
+    </div>
+  </div>
+
+  <!-- User menu dropdown -->
+  <div id="user-menu" style="display:none;position:fixed;top:52px;right:8px;z-index:500;background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:6px;min-width:170px;max-width:calc(100vw - 16px);box-shadow:0 8px 24px rgba(0,0,0,.2)">
+    <div id="user-menu-name" style="font-weight:700;font-size:13px;color:var(--text);padding:6px 8px 2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis"></div>
+    <div id="user-menu-email" style="font-size:10px;color:var(--text3);padding:0 8px 6px;border-bottom:1px solid var(--border);margin-bottom:4px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis"></div>
+    <button onclick="syncNow()" style="width:100%;text-align:left;background:none;border:none;padding:6px 8px;font-size:12px;color:var(--text2);cursor:pointer;border-radius:6px">🔄 Sync now</button>
+    <div id="user-menu-sync-time" style="font-size:9px;color:var(--text3);padding:0 8px 4px"></div>
+    <button onclick="authLogout()" style="width:100%;text-align:left;background:none;border:none;padding:6px 8px;font-size:12px;color:var(--red);cursor:pointer;border-radius:6px">→ Sign out</button>
+  </div>
+
+  <!-- NAV (hidden, kept for JS compat) -->
+  <div style="display:none">
+    <button class="nav-btn active" id="nav-btn-workout"></button>
+  </div>
+
+  <!-- WORKOUT PAGE -->
+  <div class="page active" id="page-workout">
+
+    <!-- MODE TOGGLE — three buttons at the very top -->
+    <div class="home-mode-toggle" style="grid-template-columns:1fr 1fr 1fr">
+      <button class="home-mode-btn active" id="home-btn-workout" onclick="setHomeMode('workout')">
+        <span class="home-mode-icon">🏋️</span>
+        <span class="home-mode-label">Workout</span>
+      </button>
+      <button class="home-mode-btn" id="home-btn-food" onclick="setHomeMode('food')">
+        <span class="home-mode-icon">🍱</span>
+        <span class="home-mode-label">Food & Water</span>
+      </button>
+      <button class="home-mode-btn" id="home-btn-steps" onclick="setHomeMode('steps')">
+        <span class="home-mode-icon">👟</span>
+        <span class="home-mode-label">Steps</span>
+      </button>
+    </div>
+
+    <!-- WORKOUT PANEL -->
+    <div id="home-workout-panel">
+    <div class="stat-row">
+      <div class="stat"><div class="stat-val" id="wk-sets">0/0</div><div class="stat-lbl">Sets Done</div></div>
+      <div class="stat"><div class="stat-val" id="wk-vol">0</div><div class="stat-lbl">kg Volume</div></div>
+      <div class="stat"><div class="stat-val" id="wk-kcal">0</div><div class="stat-lbl">kcal Burned</div></div>
+      <div class="stat"><div class="stat-val" id="wk-time">0:00</div><div class="stat-lbl">Duration</div></div>
+    </div>
+    <div style="display:flex;gap:6px;margin-bottom:10px">
+      <button class="btn-outline" id="timer-btn" onclick="toggleTimer()" style="flex:1">▶ Start</button>
+      <button class="btn-outline" onclick="resetTimer()">Reset</button>
+      <button class="btn-outline" onclick="openLibrary()" style="flex:1" id="add-ex-btn">+ Exercise</button>
+      <button class="btn-outline" onclick="openCommunityWorkouts()" title="Browse community workouts" style="padding:10px 12px;flex-shrink:0">🌍</button>
+    </div>
+    <!-- Smart suggestion button — shown when session is empty -->
+    <div id="smart-suggest-bar" style="margin-bottom:10px">
+      <button onclick="openSmartSuggest()" style="width:100%;background:linear-gradient(135deg,var(--red),#f97316);color:#fff;border:none;border-radius:12px;padding:13px 16px;font-family:var(--font-cond);font-weight:900;font-size:16px;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:8px;letter-spacing:.3px">
+        💪 What am I training today?
+      </button>
+    </div>
+    <div class="view-toggle">
+      <button class="view-btn active" id="vbtn-week" onclick="setView('week')">This Week</button>
+      <button class="view-btn" id="vbtn-calendar" onclick="setView('calendar')">Calendar</button>
+    </div>
+    <div id="week-view"><div class="day-bar" id="day-bar"></div></div>
+    <div id="calendar-view" style="display:none">
+      <div class="card" style="padding:12px 12px 6px">
+        <div class="cal-nav">
+          <button class="cal-nav-btn" onclick="calPrev()">‹</button>
+          <div class="cal-month" id="cal-month-label"></div>
+          <button class="cal-nav-btn" onclick="calNext()">›</button>
+        </div>
+        <div class="cal-grid" id="cal-grid"></div>
+      </div>
+    </div>
+    <div id="day-detail-panel"></div>
+    <div id="today-workout-section">
+      <button class="copy-workout-btn" onclick="copyLastWorkout()">📋 Copy Last Workout</button>
+      <!-- AI refine button — inside today section, shown when exercises exist -->
+      <div id="ai-refine-bar" style="display:none;margin-bottom:10px">
+        <button onclick="openAIRefine()" style="width:100%;background:linear-gradient(135deg,#6366f1,#8b5cf6);color:#fff;border:none;border-radius:12px;padding:11px 16px;font-size:13px;font-weight:700;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:6px">
+          🤖 AI Coach — Review & Improve This Workout
+        </button>
+      </div>
+      <!-- QUICK ADD -->
+      <div class="quick-add-wrap" id="quick-add-wrap">
+        <div style="display:flex;gap:6px;align-items:flex-start">
+          <textarea class="inp" id="quick-add-inp" placeholder="Paste one or more exercises:&#10;Bench press 80,8 90,6 100,4&#10;Squat 100,8 120,6&#10;&#10;Or add a date on the first line:&#10;date: 18 mar" style="flex:1;font-size:13px;resize:vertical;min-height:60px;line-height:1.4" autocomplete="off"></textarea>
+          <button class="lib-custom-btn" onclick="quickAddParse('quick-add-inp','quick-add-preview',false)" style="padding:9px 14px;align-self:flex-start">Add</button>
+        </div>
+        <div id="quick-add-preview" style="font-size:11px;color:var(--text3);margin-top:5px;min-height:16px"></div>
+      </div>
+      <div id="ex-container"></div>
+      <button class="btn-primary" onclick="saveWorkout()">Save Workout ✓</button>
+    </div>
+    </div><!-- end home-workout-panel -->
+
+    <!-- FOOD & WATER PANEL (inline on home) -->
+    <div id="home-food-panel" style="display:none">
+      <!-- Diet Plan Banner (home) -->
+      <div id="home-diet-plan-banner" style="display:none;background:linear-gradient(135deg,var(--red),#f97316);border-radius:12px;padding:10px 14px;margin-bottom:10px;color:#fff">
+        <div style="display:flex;justify-content:space-between;align-items:center">
+          <div>
+            <div style="font-family:var(--font-cond);font-weight:900;font-size:15px" id="home-diet-plan-name">My Plan</div>
+            <div style="font-size:11px;opacity:.85" id="home-diet-plan-status">Day 1 of 14</div>
+          </div>
+          <button onclick="logTodaysPlan();renderHomeFoodPanel()" style="background:rgba(255,255,255,.25);border:1px solid rgba(255,255,255,.4);border-radius:8px;padding:6px 10px;color:#fff;font-size:12px;font-weight:700;cursor:pointer">Log Today</button>
+        </div>
+      </div>
+      <!-- Import plan button (home) -->
+      <div id="home-diet-import-btn" style="margin-bottom:10px">
+        <button onclick="openDietPlanImport()" style="width:100%;background:var(--surface);border:1.5px dashed var(--border);border-radius:12px;padding:10px;font-size:13px;font-weight:600;color:var(--text2);cursor:pointer;display:flex;align-items:center;justify-content:center;gap:6px">
+          📋 Import a Diet Plan
+        </button>
+      </div>
+      <!-- Date selector -->
+      <div style="display:flex;align-items:center;gap:8px;margin-bottom:12px">
+        <button class="btn-sm" onclick="foodDateShift(-1)">‹</button>
+        <div id="home-food-date-label" style="flex:1;text-align:center;font-family:var(--font-cond);font-weight:700;font-size:18px;text-transform:uppercase"></div>
+        <button class="btn-sm" onclick="foodDateShift(1)">›</button>
+      </div>
+      <!-- Water -->
+      <div class="card" style="padding:12px 14px;margin-bottom:10px">
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px">
+          <div style="font-family:var(--font-cond);font-weight:700;font-size:16px;text-transform:uppercase">💧 Water</div>
+          <div id="home-water-display" style="font-family:var(--font-cond);font-weight:900;font-size:22px;color:#185FA5">0L / 8</div>
+        </div>
+        <div id="home-water-glasses" style="display:flex;gap:5px;flex-wrap:wrap;margin-bottom:8px"></div>
+        <div style="display:flex;gap:6px">
+          <button class="btn-outline" style="flex:1" onclick="addWater(250)">+250ml</button>
+          <button class="btn-outline" style="flex:1" onclick="addWater(500)">+500ml</button>
+          <button class="btn-outline" onclick="resetWater()">Reset</button>
+        </div>
+      </div>
+      <!-- Summary -->
+      <div class="card" style="padding:12px 14px;margin-bottom:10px">
+        <div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:8px">
+          <div style="font-family:var(--font-cond);font-weight:700;font-size:16px;text-transform:uppercase">Today's Nutrition</div>
+          <div id="home-food-kcal" style="font-family:var(--font-cond);font-weight:900;font-size:22px;color:var(--red)">0 kcal</div>
+        </div>
+        <div id="home-macro-bars"></div>
+      </div>
+      <!-- Add food -->
+      <!-- Add food + build recipe buttons -->
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:10px">
+        <button class="btn-primary" onclick="openFoodSearch()">+ Add Food</button>
+        <button class="btn-primary" style="background:var(--surface2);color:var(--text);border:1px solid var(--border)" onclick="openRecipeBuilder()">🧪 Build Recipe</button>
+      </div>
+      <!-- Meal log -->
+      <div id="home-meal-log"></div>
+    </div><!-- end home-food-panel -->
+
+    <!-- STEPS PANEL -->
+    <div id="home-steps-panel" style="display:none">
+
+      <!-- Daily step ring + count -->
+      <div class="card" style="padding:16px;margin-bottom:10px">
+        <div style="display:flex;align-items:center;gap:16px">
+          <!-- SVG ring -->
+          <div style="position:relative;flex-shrink:0;width:100px;height:100px">
+            <svg width="100" height="100" viewBox="0 0 100 100">
+              <circle cx="50" cy="50" r="42" fill="none" stroke="var(--surface2)" stroke-width="10"/>
+              <circle id="step-ring-arc" cx="50" cy="50" r="42" fill="none" stroke="var(--red)"
+                stroke-width="10" stroke-linecap="round"
+                stroke-dasharray="264" stroke-dashoffset="264"
+                transform="rotate(-90 50 50)" style="transition:stroke-dashoffset .6s"/>
+            </svg>
+            <div style="position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center">
+              <div id="step-ring-pct" style="font-family:var(--font-cond);font-weight:900;font-size:18px;color:var(--red)">0%</div>
+            </div>
+          </div>
+          <!-- Stats -->
+          <div style="flex:1">
+            <div id="step-count-display" style="font-family:var(--font-cond);font-weight:900;font-size:42px;color:var(--text);line-height:1">0</div>
+            <div style="font-size:13px;color:var(--text3);margin-bottom:6px">of <span id="step-goal-display">8,000</span> steps</div>
+            <div style="display:flex;gap:10px">
+              <div>
+                <div id="step-km-display" style="font-size:15px;font-weight:700;color:var(--text)">0.0</div>
+                <div style="font-size:10px;color:var(--text3);font-weight:600">km</div>
+              </div>
+              <div>
+                <div id="step-kcal-display" style="font-size:15px;font-weight:700;color:var(--red)">0</div>
+                <div style="font-size:10px;color:var(--text3);font-weight:600">kcal</div>
+              </div>
+              <div>
+                <div id="step-mins-display" style="font-size:15px;font-weight:700;color:var(--text)">0</div>
+                <div style="font-size:10px;color:var(--text3);font-weight:600">active min</div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Live counter + permission -->
+      <div class="card" style="padding:14px;margin-bottom:10px">
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px">
+          <div style="font-family:var(--font-cond);font-weight:700;font-size:15px;text-transform:uppercase">Live Counter</div>
+          <div id="step-sensor-status" style="font-size:11px;font-weight:700;padding:3px 8px;border-radius:10px;background:var(--surface2);color:var(--text3)">● Off</div>
+        </div>
+        <div style="font-size:12px;color:var(--text2);margin-bottom:10px;line-height:1.5" id="step-sensor-info">
+          Counts steps using your phone's accelerometer while the app is open.
+        </div>
+        <div style="display:flex;gap:8px">
+          <button class="btn-primary" style="flex:1" id="step-start-btn" onclick="startStepCounter()">▶ Start Counting</button>
+          <button class="btn-outline" onclick="stopStepCounter()">Stop</button>
+          <button class="btn-outline" onclick="resetTodaySteps()">Reset</button>
+        </div>
+      </div>
+
+      <!-- Manual sync from health app -->
+      <div class="card" style="padding:14px;margin-bottom:10px">
+        <div style="font-family:var(--font-cond);font-weight:700;font-size:15px;text-transform:uppercase;margin-bottom:6px">📲 Sync from Health App</div>
+        <!-- Android / iOS tabs -->
+        <div style="display:flex;gap:6px;margin-bottom:8px">
+          <button class="food-meal-btn active" id="sync-tab-android" onclick="setSyncTab('android')" style="font-size:11px">🤖 Android</button>
+          <button class="food-meal-btn" id="sync-tab-ios" onclick="setSyncTab('ios')" style="font-size:11px">🍎 iPhone</button>
+        </div>
+        <div id="sync-instructions-android" style="font-size:12px;color:var(--text3);line-height:1.6;margin-bottom:8px;padding:8px;background:var(--surface2);border-radius:8px">
+          1. Open <b style="color:var(--text2)">Google Fit</b> app<br>
+          2. Tap <b style="color:var(--text2)">Today</b> tab at bottom<br>
+          3. Your step count is shown at the top<br>
+          4. Enter that number below ↓
+        </div>
+        <div id="sync-instructions-ios" style="display:none;font-size:12px;color:var(--text3);line-height:1.6;margin-bottom:8px;padding:8px;background:var(--surface2);border-radius:8px">
+          1. Open <b style="color:var(--text2)">Apple Health</b> app<br>
+          2. Tap <b style="color:var(--text2)">Summary</b> at bottom<br>
+          3. Tap <b style="color:var(--text2)">Steps</b> in the Activity section<br>
+          4. Enter today's count below ↓
+        </div>
+        <div style="display:flex;gap:8px;align-items:center;margin-top:8px;width:100%">
+          <input class="inp" id="step-manual-input" type="number" inputmode="numeric"
+            placeholder="e.g. 7500"
+            style="flex:1;min-width:0;font-size:15px;padding:11px 12px">
+          <button class="btn-primary" onclick="syncManualSteps()"
+            style="flex-shrink:0;width:90px;padding:11px 0;font-size:14px;text-align:center">
+            Sync ✓
+          </button>
+        </div>
+      </div>
+
+      <!-- Step goal setting -->
+      <div class="card" style="padding:14px;margin-bottom:10px">
+        <div style="font-family:var(--font-cond);font-weight:700;font-size:15px;text-transform:uppercase;margin-bottom:8px">Daily Goal</div>
+        <div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:8px" id="step-goal-chips"></div>
+        <div style="display:flex;gap:8px;align-items:center">
+          <input class="inp" id="step-goal-input" type="number" inputmode="numeric" placeholder="Custom goal" style="flex:1">
+          <button class="btn-outline" onclick="setStepGoal(parseInt(document.getElementById('step-goal-input').value))">Set</button>
+        </div>
+      </div>
+
+      <!-- 7-day history -->
+      <div class="card" style="padding:14px">
+        <div style="font-family:var(--font-cond);font-weight:700;font-size:15px;text-transform:uppercase;margin-bottom:10px">Last 7 Days</div>
+        <div id="step-history-bars"></div>
+      </div>
+
+    </div><!-- end home-steps-panel -->
+
+  </div>
+
+  <!-- REST TIMER OVERLAY -->
+  <div class="rest-overlay hidden" id="rest-overlay">
+    <div class="rest-ring">
+      <svg width="44" height="44" viewBox="0 0 44 44">
+        <circle cx="22" cy="22" r="18" fill="none" stroke="rgba(255,255,255,.2)" stroke-width="4"/>
+        <circle id="rest-ring-arc" cx="22" cy="22" r="18" fill="none" stroke="#E24B4A" stroke-width="4"
+          stroke-dasharray="113" stroke-dashoffset="0" stroke-linecap="round"/>
+      </svg>
+      <div class="rest-ring-num" id="rest-num">90</div>
+    </div>
+    <div>
+      <div class="rest-label">Rest Timer</div>
+      <div style="font-size:11px;opacity:.6">Next set ready</div>
+    </div>
+    <button class="rest-skip" onclick="skipRest()">Skip ›</button>
+  </div>
+
+  <!-- 1RM MODAL -->
+  <div class="modal-overlay" id="orm-modal" style="display:none" onclick="if(event.target===this)this.style.display='none'">
+    <div class="modal-sheet" style="max-height:70vh">
+      <div class="modal-handle"></div>
+      <div class="modal-header">
+        <div class="modal-title">1RM Calculator</div>
+        <button class="modal-close" onclick="document.getElementById('orm-modal').style.display='none'">×</button>
+      </div>
+      <div style="padding:16px;overflow-y:auto">
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:12px">
+          <div><div style="font-size:11px;font-weight:700;color:var(--text3);margin-bottom:4px;text-transform:uppercase">Weight (kg)</div>
+            <input class="inp" id="orm-weight" type="number" placeholder="100" inputmode="decimal" oninput="calc1RM()"></div>
+          <div><div style="font-size:11px;font-weight:700;color:var(--text3);margin-bottom:4px;text-transform:uppercase">Reps</div>
+            <input class="inp" id="orm-reps" type="number" placeholder="5" inputmode="numeric" oninput="calc1RM()"></div>
+        </div>
+        <div style="margin-bottom:8px"><div style="font-size:11px;font-weight:700;color:var(--text3);margin-bottom:4px;text-transform:uppercase">Exercise</div>
+          <select class="inp" id="orm-ex" onchange="calc1RM()">
+            <option value="bench">Bench Press</option>
+            <option value="squat">Squat</option>
+            <option value="deadlift">Deadlift</option>
+            <option value="ohp">Overhead Press</option>
+            <option value="row">Barbell Row</option>
+          </select>
+        </div>
+        <div id="orm-result"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- PLATE CALCULATOR MODAL -->
+  <div class="modal-overlay" id="plate-modal" style="display:none" onclick="if(event.target===this)this.style.display='none'">
+    <div class="modal-sheet" style="max-height:60vh">
+      <div class="modal-handle"></div>
+      <div class="modal-header">
+        <div class="modal-title">Plate Calculator</div>
+        <button class="modal-close" onclick="document.getElementById('plate-modal').style.display='none'">×</button>
+      </div>
+      <div style="padding:16px;overflow-y:auto">
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:12px">
+          <div><div style="font-size:11px;font-weight:700;color:var(--text3);margin-bottom:4px;text-transform:uppercase">Target (kg)</div>
+            <input class="inp" id="plate-target" type="number" placeholder="100" inputmode="decimal" oninput="calcPlates()"></div>
+          <div><div style="font-size:11px;font-weight:700;color:var(--text3);margin-bottom:4px;text-transform:uppercase">Bar weight</div>
+            <select class="inp" id="plate-bar" onchange="calcPlates()">
+              <option value="20">20 kg (Olympic)</option>
+              <option value="15">15 kg</option>
+              <option value="10">10 kg</option>
+            </select>
+          </div>
+        </div>
+        <div id="plate-result"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- PROGRAMS PAGE -->
+  <div class="page" id="page-programs">
+    <div class="section-title">Active Program</div>
+    <div id="active-program-card"></div>
+    <div class="section-title" style="margin-top:12px">Available Programs</div>
+    <div id="programs-list"></div>
+  </div>
+
+  <!-- RECORDS PAGE -->
+  <div class="page" id="page-records">
+    <div class="section-title">Hall of Fame — Personal Records</div>
+    <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:6px;margin-bottom:12px">
+      <div class="stat"><div class="stat-val" id="rec-total-prs" style="font-size:22px">0</div><div class="stat-lbl">Total PRs</div></div>
+      <div class="stat"><div class="stat-val" id="rec-this-month" style="font-size:22px">0</div><div class="stat-lbl">This Month</div></div>
+      <div class="stat"><div class="stat-val" id="rec-best-week" style="font-size:22px">0</div><div class="stat-lbl">Best Week</div></div>
+    </div>
+
+    <!-- Muscle Heatmap -->
+    <div class="card">
+      <div style="font-family:var(--font-cond);font-weight:700;font-size:16px;text-transform:uppercase;margin-bottom:10px">Muscle Heatmap <span style="font-size:11px;font-weight:400;text-transform:none;color:var(--text3)">last 7 days</span></div>
+      <div class="heatmap-wrap">
+        <div class="heatmap-svg" id="heatmap-svg"></div>
+        <div id="heatmap-legend" class="heatmap-legend"></div>
+      </div>
+    </div>
+
+    <!-- 1RM & Strength Standards -->
+    <div class="card">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">
+        <div style="font-family:var(--font-cond);font-weight:700;font-size:16px;text-transform:uppercase">Strength Standards</div>
+        <button class="btn-sm" onclick="document.getElementById('orm-modal').style.display='flex'">1RM Calc</button>
+      </div>
+      <div id="strength-standards"></div>
+    </div>
+
+    <div class="section-title" style="margin-top:4px">All-Time PRs by Exercise</div>
+    <div id="pr-list"></div>
+  </div>
+
+  <!-- WEEKLY REPORT PAGE -->
+  <div class="page" id="page-report">
+    <div style="display:flex;gap:6px;margin-bottom:12px">
+      <button class="btn-sm active" id="rep-btn-this" onclick="showReport('this')">This Week</button>
+      <button class="btn-sm" id="rep-btn-last" onclick="showReport('last')">Last Week</button>
+      <button class="btn-sm" id="rep-btn-month" onclick="showReport('month')">This Month</button>
+    </div>
+    <div id="report-content"></div>
+  </div>
+
+  <!-- Existing pages follow -->
+  <div class="page" id="page-calories">
+    <div class="card" id="cal-profile-card">
+      <div class="section-title">Your Profile <span style="font-size:10px;color:var(--text3);font-weight:400;text-transform:none;letter-spacing:0">(nutrition targets auto-update when saved)</span></div>
+      <div class="input-row"><label>Body Weight</label><input class="inp" id="cp-wt" type="number" placeholder="75" inputmode="decimal"><span style="font-size:13px;color:var(--text2);margin-left:4px">kg</span></div>
+      <div class="input-row"><label>Height</label><input class="inp" id="cp-ht" type="number" placeholder="170" inputmode="numeric"><span style="font-size:13px;color:var(--text2);margin-left:4px">cm</span></div>
+      <div class="input-row"><label>Gender</label><select class="inp" id="cp-gender"><option value="male">Male</option><option value="female">Female</option></select></div>
+      <div class="input-row"><label>Age</label><input class="inp" id="cp-age" type="number" placeholder="28" inputmode="numeric"></div>
+      <div class="input-row"><label>Fitness Level</label>
+        <select class="inp" id="cp-fit">
+          <option value="beginner">Sedentary / Beginner</option>
+          <option value="intermediate" selected>Moderate / Intermediate</option>
+          <option value="advanced">Very Active / Advanced</option>
+        </select>
+      </div>
+      <div class="input-row"><label>Daily Water Goal</label><input class="inp" id="cp-water-goal" type="number" placeholder="auto" step="0.1" inputmode="decimal"><span style="font-size:13px;color:var(--text2);margin-left:4px">L/day</span></div>
+      <div style="font-size:11px;color:var(--text3);margin-bottom:10px">Leave water blank to auto-set (35ml × body weight)</div>
+      <button class="btn-primary" onclick="saveCalProfile()">Save Profile — Update All Targets ✓</button>
+      <!-- Live preview of targets -->
+      <div id="cp-targets-preview" style="margin-top:10px;display:grid;grid-template-columns:repeat(3,1fr);gap:6px"></div>
+    </div>
+
+    <div class="stat-row" style="grid-template-columns:repeat(3,1fr)">
+      <div class="stat"><div class="stat-val" id="cal-today">—</div><div class="stat-lbl">Today kcal</div></div>
+      <div class="stat"><div class="stat-val" id="cal-week">—</div><div class="stat-lbl">This Week</div></div>
+      <div class="stat"><div class="stat-val" id="cal-avg">—</div><div class="stat-lbl">Avg / session</div></div>
+    </div>
+
+    <div class="card" style="padding:16px">
+      <div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:10px">
+        <div style="font-family:var(--font-cond);font-weight:700;font-size:20px;text-transform:uppercase;color:var(--text)">Calories Burned</div>
+        <div id="cal-range-lbl" style="font-size:12px;font-weight:600;color:var(--text3)">Last 30 days</div>
+      </div>
+      <canvas id="cal-chart" height="180"></canvas>
+      <div id="cal-chart-empty" style="text-align:center;padding:40px 0;color:var(--text3);font-size:14px;display:none">Save workouts to see your calorie burn history!</div>
+      <div style="display:flex;gap:6px;margin-top:10px">
+        <button class="btn-sm" id="cal-range-30" onclick="setCalRange(30)" style="background:var(--red);color:#fff;border-color:var(--red)">30 days</button>
+        <button class="btn-sm" id="cal-range-14" onclick="setCalRange(14)">14 days</button>
+        <button class="btn-sm" id="cal-range-7" onclick="setCalRange(7)">7 days</button>
+      </div>
+    </div>
+
+    <div class="section-title">Calorie Log</div>
+    <div id="cal-history-list"></div>
+
+    <div class="card" style="padding:14px">
+      <div class="section-title">Exercise Calorie Reference</div>
+      <div style="font-size:12px;color:var(--text3);margin-bottom:8px">Estimated kcal per set based on your profile</div>
+      <div id="cal-reference-list"></div>
+    </div>
+  </div>
+
+  <!-- PROGRESS PAGE -->
+  <div class="page" id="page-progress">
+    <!-- Search bar -->
+    <div style="position:relative;margin-bottom:10px">
+      <input class="inp" id="prog-search" placeholder="🔍 Search exercise…" oninput="filterProgress()" autocomplete="off"
+        style="width:100%;padding-left:14px;font-size:14px">
+    </div>
+    <!-- Muscle group filter chips -->
+    <div id="prog-muscle-chips" style="display:flex;gap:6px;overflow-x:auto;scrollbar-width:none;margin-bottom:12px;padding-bottom:2px"></div>
+    <!-- Exercise list (replaces pill-row) -->
+    <div id="prog-ex-list" style="margin-bottom:10px"></div>
+    <!-- Chart + stats (hidden until exercise selected) -->
+    <div id="prog-detail" style="display:none">
+      <div class="card" style="padding:16px">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">
+          <div id="prog-title" style="font-family:var(--font-cond);font-weight:700;font-size:20px;text-transform:uppercase;color:var(--text)">—</div>
+          <div style="display:flex;align-items:center;gap:8px">
+            <div id="prog-best" style="font-size:13px;font-weight:700;color:var(--red)"></div>
+            <button class="btn-sm" onclick="closeProgDetail()">✕</button>
+          </div>
+        </div>
+        <!-- Time range -->
+        <div style="display:flex;gap:5px;margin-bottom:10px">
+          <button class="btn-sm" id="prog-range-all" onclick="setProgRange('all')" style="background:var(--red);color:#fff;border-color:var(--red)">All</button>
+          <button class="btn-sm" id="prog-range-90" onclick="setProgRange(90)">90d</button>
+          <button class="btn-sm" id="prog-range-30" onclick="setProgRange(30)">30d</button>
+          <button class="btn-sm" id="prog-range-7" onclick="setProgRange(7)">7d</button>
+          <select class="btn-sm" id="prog-metric" onchange="renderProgressDetail()" style="cursor:pointer;font-weight:700">
+            <option value="max">Max kg</option>
+            <option value="vol">Volume</option>
+            <option value="reps">Max reps</option>
+          </select>
+        </div>
+        <canvas id="prog-chart" height="160"></canvas>
+        <div id="prog-empty" style="text-align:center;padding:30px 0;color:var(--text3);font-size:14px;display:none">No data yet for this exercise</div>
+      </div>
+      <div class="stat-row">
+        <div class="stat"><div class="stat-val" id="prog-sessions">0</div><div class="stat-lbl">Sessions</div></div>
+        <div class="stat"><div class="stat-val" id="prog-pr">—</div><div class="stat-lbl">Best (kg)</div></div>
+        <div class="stat"><div class="stat-val" id="prog-gain">—</div><div class="stat-lbl">Gain</div></div>
+      </div>
+      <div id="prog-history-list"></div>
+    </div>
+  </div>
+
+  <!-- WEIGHT PAGE -->
+  <div class="page" id="page-weight">
+    <div class="card">
+      <div class="section-title">Log Weight</div>
+      <div class="input-row"><label>Weight (kg)</label><input class="inp" id="w-kg" type="number" step="0.1" placeholder="75.0" inputmode="decimal"></div>
+      <div class="input-row"><label>Date</label><input class="inp" id="w-date" type="date"></div>
+      <div class="input-row"><label>Notes</label><input class="inp" id="w-note" type="text" placeholder="Optional note"></div>
+      <button class="btn-primary" onclick="logWeight()">Log Weight</button>
+    </div>
+    <div class="card" style="padding:16px">
+      <div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:10px">
+        <div style="font-family:var(--font-cond);font-weight:700;font-size:20px;text-transform:uppercase;color:var(--text)">Weight Trend</div>
+        <div id="wt-stats" style="font-size:12px;font-weight:700;color:var(--blue)"></div>
+      </div>
+      <canvas id="wt-chart" height="160"></canvas>
+      <div id="wt-empty" style="text-align:center;padding:30px 0;color:var(--text3);font-size:14px;display:none">Log your first weight entry above!</div>
+    </div>
+    <div class="section-title">History</div>
+    <div id="wt-history"></div>
+  </div>
+
+  <!-- BODY AGE PAGE -->
+  <div class="page" id="page-bodyage">
+    <div class="card">
+      <div class="section-title">Your Details</div>
+      <div class="input-row"><label>Age (yrs)</label><input class="inp" id="ba-age" type="number" placeholder="28" inputmode="numeric"></div>
+      <div class="input-row"><label>Gender</label><select class="inp" id="ba-gender"><option value="male">Male</option><option value="female">Female</option></select></div>
+      <div class="input-row"><label>Weight (kg)</label><input class="inp" id="ba-wt" type="number" placeholder="75" inputmode="decimal"></div>
+      <div class="input-row"><label>Height (cm)</label><input class="inp" id="ba-ht" type="number" placeholder="175" inputmode="numeric"></div>
+      <div class="input-row"><label>Body Fat %</label><input class="inp" id="ba-bf" type="number" placeholder="18" min="3" max="60" inputmode="decimal"></div>
+      <div class="input-row"><label>Resting HR</label><input class="inp" id="ba-rhr" type="number" placeholder="65" inputmode="numeric"></div>
+      <div class="input-row"><label>Activity</label>
+        <select class="inp" id="ba-act">
+          <option value="1">Sedentary</option><option value="2">Light (1-2x/wk)</option>
+          <option value="3" selected>Moderate (3-4x/wk)</option><option value="4">Active (5+/wk)</option><option value="5">Athlete</option>
+        </select>
+      </div>
+      <div class="input-row"><label>Sleep (hrs)</label><input class="inp" id="ba-sleep" type="number" placeholder="7" min="3" max="12" step="0.5" inputmode="decimal"></div>
+      <div class="input-row"><label>Smoker?</label><select class="inp" id="ba-smoke"><option value="0">No</option><option value="1">Yes</option></select></div>
+      <div class="input-row"><label>Water (L/day)</label><input class="inp" id="ba-water" type="number" placeholder="2.5" step="0.5" inputmode="decimal"></div>
+      <button class="btn-primary" onclick="calcBodyAge()">Calculate Body Age</button>
+    </div>
+    <div id="ba-result"></div>
+  </div>
+
+  <!-- FOOD & WATER PAGE -->
+  <div class="page" id="page-food">
+    <!-- Diet Plan Banner (shown when a plan is active) -->
+    <div id="diet-plan-banner" style="display:none;background:linear-gradient(135deg,var(--red),#f97316);border-radius:12px;padding:10px 14px;margin-bottom:10px;color:#fff">
+      <div style="display:flex;justify-content:space-between;align-items:center">
+        <div>
+          <div style="font-family:var(--font-cond);font-weight:900;font-size:15px" id="diet-plan-name">My Plan</div>
+          <div style="font-size:11px;opacity:.85" id="diet-plan-status">Day 1 of 14</div>
+        </div>
+        <div style="display:flex;gap:6px;align-items:center">
+          <button onclick="logTodaysPlan()" style="background:rgba(255,255,255,.25);border:1px solid rgba(255,255,255,.4);border-radius:8px;padding:6px 10px;color:#fff;font-size:12px;font-weight:700;cursor:pointer">Log Today</button>
+          <button onclick="openDietPlanManager()" style="background:none;border:none;color:#fff;font-size:18px;cursor:pointer;padding:4px" title="Manage plan">⚙</button>
+        </div>
+      </div>
+      <div id="diet-plan-preview" style="margin-top:8px;font-size:11px;opacity:.85;line-height:1.6"></div>
+    </div>
+
+    <!-- Import Plan button (shown when no plan active) -->
+    <div id="diet-plan-import-btn" style="margin-bottom:10px">
+      <button onclick="openDietPlanImport()" style="width:100%;background:var(--surface);border:1.5px dashed var(--border);border-radius:12px;padding:11px;font-size:13px;font-weight:600;color:var(--text2);cursor:pointer;display:flex;align-items:center;justify-content:center;gap:6px">
+        📋 Import a Diet Plan
+      </button>
+    </div>
+
+    <!-- Date selector -->
+    <div style="display:flex;align-items:center;gap:8px;margin-bottom:12px">
+      <button class="btn-sm" onclick="foodDateShift(-1)">‹</button>
+      <div id="food-date-label" style="flex:1;text-align:center;font-family:var(--font-cond);font-weight:700;font-size:18px;text-transform:uppercase"></div>
+      <button class="btn-sm" onclick="foodDateShift(1)">›</button>
+    </div>
+
+    <!-- Water tracker -->
+    <div class="card" style="padding:12px 14px;margin-bottom:10px">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px">
+        <div style="font-family:var(--font-cond);font-weight:700;font-size:16px;text-transform:uppercase">💧 Water</div>
+        <div id="water-display" style="font-family:var(--font-cond);font-weight:900;font-size:22px;color:#185FA5">0 / 8</div>
+      </div>
+      <div id="water-glasses" style="display:flex;gap:5px;flex-wrap:wrap;margin-bottom:8px"></div>
+      <div style="display:flex;gap:6px">
+        <button class="btn-outline" style="flex:1" onclick="addWater(250)">+ 250ml</button>
+        <button class="btn-outline" style="flex:1" onclick="addWater(500)">+ 500ml</button>
+        <button class="btn-outline" onclick="resetWater()">Reset</button>
+      </div>
+    </div>
+
+    <!-- Daily nutrition summary -->
+    <div class="card" style="padding:12px 14px;margin-bottom:10px" id="food-summary-card">
+      <div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:10px">
+        <div style="font-family:var(--font-cond);font-weight:700;font-size:16px;text-transform:uppercase">Today's Nutrition</div>
+        <div style="text-align:right">
+          <div id="food-total-kcal" style="font-family:var(--font-cond);font-weight:900;font-size:22px;color:var(--red)">0 kcal</div>
+          <div id="food-protein-target-label" style="font-size:10px;color:var(--text3);font-weight:600"></div>
+        </div>
+      </div>
+      <div id="food-macro-bars"></div>
+      <div style="margin-top:10px">
+        <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.8px;color:var(--text3);margin-bottom:6px">Micronutrients</div>
+        <div id="food-micro-bars" style="display:grid;grid-template-columns:1fr 1fr;gap:4px 12px"></div>
+      </div>
+    </div>
+
+    <!-- Add food + build recipe buttons -->
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:10px">
+      <button class="btn-primary" onclick="openFoodSearch()">+ Add Food</button>
+      <button class="btn-primary" style="background:var(--surface2);color:var(--text);border:1px solid var(--border)" onclick="openRecipeBuilder()">🧪 Build Recipe</button>
+    </div>
+
+    <!-- Meal log -->
+    <div id="food-meal-log"></div>
+  </div>
+
+  <!-- FOOD SEARCH MODAL -->
+  <div class="modal-overlay" id="food-modal" style="display:none" onclick="if(event.target===this)closeFoodModal()">
+    <div class="modal-sheet" style="max-height:92vh;display:flex;flex-direction:column;overflow:hidden">
+      <div class="modal-handle" style="flex-shrink:0"></div>
+      <div class="modal-header" style="flex-shrink:0">
+        <div class="modal-title">Add Food</div>
+        <button class="modal-close" onclick="closeFoodModal()">×</button>
+      </div>
+      <!-- Meal selector -->
+      <div style="display:flex;gap:6px;padding:8px 16px;border-bottom:1px solid var(--border);flex-shrink:0;overflow-x:auto;scrollbar-width:none">
+        <button class="food-meal-btn active" id="fmeal-breakfast" onclick="setFoodMeal('breakfast')">🌅 Breakfast</button>
+        <button class="food-meal-btn" id="fmeal-lunch" onclick="setFoodMeal('lunch')">☀️ Lunch</button>
+        <button class="food-meal-btn" id="fmeal-dinner" onclick="setFoodMeal('dinner')">🌙 Dinner</button>
+        <button class="food-meal-btn" id="fmeal-snack" onclick="setFoodMeal('snack')">🍎 Snack</button>
+      </div>
+      <!-- Mode tabs -->
+      <div style="display:flex;gap:0;border-bottom:2px solid var(--border);flex-shrink:0;overflow-x:auto;scrollbar-width:none">
+        <button id="ftab-search" onclick="setFoodTab('search')" style="flex:1;background:none;border:none;border-bottom:2px solid var(--red);margin-bottom:-2px;padding:8px 4px;font-size:11px;font-weight:700;color:var(--red);cursor:pointer;white-space:nowrap">🔍 Search</button>
+        <button id="ftab-quick" onclick="setFoodTab('quick')" style="flex:1;background:none;border:none;border-bottom:2px solid transparent;margin-bottom:-2px;padding:8px 4px;font-size:11px;font-weight:700;color:var(--text3);cursor:pointer;white-space:nowrap">⚡ Quick</button>
+        <button id="ftab-frequent" onclick="setFoodTab('frequent')" style="flex:1;background:none;border:none;border-bottom:2px solid transparent;margin-bottom:-2px;padding:8px 4px;font-size:11px;font-weight:700;color:var(--text3);cursor:pointer;white-space:nowrap">🔁 Recent</button>
+        <button id="ftab-templates" onclick="setFoodTab('templates')" style="flex:1;background:none;border:none;border-bottom:2px solid transparent;margin-bottom:-2px;padding:8px 4px;font-size:11px;font-weight:700;color:var(--text3);cursor:pointer;white-space:nowrap">📋 Meals</button>
+        <button id="ftab-ai" onclick="setFoodTab('ai')" style="flex:1;background:none;border:none;border-bottom:2px solid transparent;margin-bottom:-2px;padding:8px 4px;font-size:11px;font-weight:700;color:var(--text3);cursor:pointer;white-space:nowrap">🤖 AI</button>
+      </div>
+
+      <!-- TAB: Search (default) -->
+      <div id="food-tab-search" style="display:flex;flex-direction:column;flex:1;min-height:0;overflow:hidden">
+        <div style="padding:8px 16px;border-bottom:1px solid var(--border);flex-shrink:0">
+          <input class="inp" id="food-search-inp" placeholder="Search 365+ Indian foods…" oninput="filterFoodSearch()" autocomplete="off" style="width:100%">
+        </div>
+        <div id="food-cat-chips" style="display:flex;gap:6px;padding:8px 16px;overflow-x:auto;scrollbar-width:none;border-bottom:1px solid var(--border);flex-shrink:0"></div>
+        <div id="food-search-list" style="overflow-y:auto;flex:1;min-height:0"></div>
+        <div style="padding:10px 16px;border-top:2px solid var(--border);background:var(--surface);flex-shrink:0">
+          <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px">
+            <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.8px;color:var(--text3)">Can't find it? Add custom food:</div>
+            <button style="background:none;border:none;font-size:11px;color:var(--red);font-weight:700;cursor:pointer" onclick="toggleCustomForm()" id="cf-toggle">▼ Expand</button>
+          </div>
+          <div id="cf-collapsed" style="display:flex;gap:6px;align-items:center">
+            <input class="inp" id="cf-name" placeholder="Food name" style="flex:1;min-width:0;font-size:13px">
+            <input class="inp" id="cf-kcal" placeholder="kcal/100g" type="number" inputmode="numeric" style="width:80px;font-size:13px">
+            <button class="lib-custom-btn" onclick="addCustomFood()" style="padding:9px 12px;flex-shrink:0">Add</button>
+          </div>
+        <!-- Expanded: all macros -->
+        <div id="cf-expanded" style="display:none;margin-top:6px">
+          <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:6px;margin-bottom:6px">
+            <div>
+              <div style="font-size:10px;font-weight:700;color:var(--text3);margin-bottom:3px">PROTEIN (g)</div>
+              <input class="inp" id="cf-protein" type="number" inputmode="decimal" placeholder="0" style="width:100%;font-size:13px">
+            </div>
+            <div>
+              <div style="font-size:10px;font-weight:700;color:var(--text3);margin-bottom:3px">CARBS (g)</div>
+              <input class="inp" id="cf-carbs" type="number" inputmode="decimal" placeholder="0" style="width:100%;font-size:13px">
+            </div>
+            <div>
+              <div style="font-size:10px;font-weight:700;color:var(--text3);margin-bottom:3px">FAT (g)</div>
+              <input class="inp" id="cf-fat" type="number" inputmode="decimal" placeholder="0" style="width:100%;font-size:13px">
+            </div>
+          </div>
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-bottom:6px">
+            <div>
+              <div style="font-size:10px;font-weight:700;color:var(--text3);margin-bottom:3px">FIBRE (g)</div>
+              <input class="inp" id="cf-fibre" type="number" inputmode="decimal" placeholder="0" style="width:100%;font-size:13px">
+            </div>
+            <div>
+              <div style="font-size:10px;font-weight:700;color:var(--text3);margin-bottom:3px">CATEGORY</div>
+              <select class="inp" id="cf-cat" style="width:100%;font-size:12px">
+                <option value="Custom">Custom</option>
+                <option value="Cereals">Cereals</option>
+                <option value="Pulses">Pulses</option>
+                <option value="Vegetables">Vegetables</option>
+                <option value="Fruits">Fruits</option>
+                <option value="Dairy">Dairy</option>
+                <option value="Meat">Meat</option>
+                <option value="Snacks">Snacks</option>
+                <option value="Mains">Mains</option>
+                <option value="Beverages">Beverages</option>
+                <option value="Sweets">Sweets</option>
+              </select>
+            </div>
+          </div>
+          <button class="btn-primary" onclick="addCustomFood()" style="width:100%">Save & Add Custom Food ✓</button>
+          <!-- Public/Private toggle -->
+          <div style="display:flex;align-items:center;justify-content:center;gap:8px;margin-top:10px;padding:8px;background:var(--surface2);border-radius:10px">
+            <label style="display:flex;align-items:center;gap:6px;cursor:pointer;font-size:12px;color:var(--text2)">
+              <input type="checkbox" id="cf-public" style="width:16px;height:16px;cursor:pointer;accent-color:var(--red)">
+              <span>🌍 Share with all LiftLog users</span>
+            </label>
+          </div>
+          <div id="cf-public-note" style="display:none;font-size:10px;color:var(--text3);text-align:center;margin-top:4px">Your name will be shown as the contributor</div>
+        </div>
+      </div>
+      </div><!-- end food-tab-search -->
+
+      <!-- TAB: Quick Combo -->
+      <div id="food-tab-quick" style="display:none;flex-direction:column;flex:1;min-height:0;overflow:hidden;padding:16px">
+        <div style="font-size:13px;color:var(--text2);margin-bottom:10px;line-height:1.5">Type everything you ate, separated by <b>+</b> or commas. Include quantities if you know them.</div>
+        <div style="background:var(--surface2);border-radius:10px;padding:10px 12px;margin-bottom:12px;font-size:12px;color:var(--text3);line-height:1.6">
+          Examples:<br>
+          <b>2 idli + sambar + filter coffee</b><br>
+          <b>rice 200g, dal, papad</b><br>
+          <b>3 chapati + paneer curry + curd</b>
+        </div>
+        <textarea id="quick-combo-inp" placeholder="e.g. 2 idli + sambar + coconut chutney + coffee…" style="width:100%;height:90px;padding:10px;border:1px solid var(--border);border-radius:10px;background:var(--surface2);color:var(--text);font-family:var(--font-body);font-size:14px;resize:none;box-sizing:border-box;margin-bottom:10px"></textarea>
+        <button class="btn-primary" onclick="parseQuickCombo()" style="width:100%;font-size:15px;padding:13px">Parse & Log All →</button>
+        <div id="quick-combo-results" style="margin-top:12px;overflow-y:auto;flex:1"></div>
+      </div>
+
+      <!-- TAB: Frequent / Recent -->
+      <div id="food-tab-frequent" style="display:none;flex-direction:column;flex:1;min-height:0;overflow-y:auto;padding:12px 16px">
+        <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.8px;color:var(--text3);margin-bottom:8px">Your most logged foods</div>
+        <div id="frequent-foods-list"></div>
+        <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.8px;color:var(--text3);margin:12px 0 8px">Yesterday's meals</div>
+        <div id="yesterday-meals-list"></div>
+      </div>
+
+      <!-- TAB: Meal Templates -->
+      <div id="food-tab-templates" style="display:none;flex-direction:column;flex:1;min-height:0;overflow:hidden">
+        <div style="padding:12px 16px;border-bottom:1px solid var(--border);flex-shrink:0">
+          <button class="btn-primary" onclick="saveMealTemplate()" style="width:100%;font-size:14px;padding:11px">💾 Save Today's ${_fSelectedMeal||'breakfast'} as Template</button>
+        </div>
+        <div id="meal-templates-list" style="overflow-y:auto;flex:1;padding:12px 16px"></div>
+      </div>
+
+      <!-- TAB: AI -->
+      <div id="food-tab-ai" style="display:none;flex-direction:column;flex:1;min-height:0;overflow:hidden;padding:16px">
+        <div style="font-size:13px;color:var(--text2);margin-bottom:10px;line-height:1.5">Describe what you ate in plain English, or upload a food photo. AI will estimate the nutrition.</div>
+        <!-- Photo upload -->
+        <div style="border:2px dashed var(--border);border-radius:12px;padding:12px;text-align:center;margin-bottom:10px;cursor:pointer;position:relative" onclick="document.getElementById('food-photo-inp').click()">
+          <div id="food-photo-preview" style="font-size:28px;margin-bottom:4px">📷</div>
+          <div style="font-size:12px;color:var(--text3)">Tap to take/upload a photo <span style="color:var(--text2);font-size:10px">(optional)</span></div>
+          <input type="file" id="food-photo-inp" accept="image/*" capture="environment" style="display:none" onchange="previewFoodPhoto(event)">
+        </div>
+        <textarea id="ai-food-inp" placeholder="e.g. I had a plate of rice with sambar, rasam, papad and a cup of curd… or just describe roughly" style="width:100%;height:80px;padding:10px;border:1px solid var(--border);border-radius:10px;background:var(--surface2);color:var(--text);font-family:var(--font-body);font-size:14px;resize:none;box-sizing:border-box;margin-bottom:10px"></textarea>
+        <button class="btn-primary" onclick="runAIMealGuess()" id="ai-food-btn" style="width:100%;font-size:15px;padding:13px">🤖 Guess My Meal →</button>
+        <div id="ai-food-results" style="margin-top:12px;overflow-y:auto;flex:1"></div>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- SMART WORKOUT SUGGEST MODAL -->
+  <div class="modal-overlay" id="smart-suggest-modal" style="display:none" onclick="if(event.target===this)closeSmartSuggest()">
+    <div class="modal-sheet" style="max-height:92vh;display:flex;flex-direction:column;overflow:hidden">
+      <div class="modal-handle" style="flex-shrink:0"></div>
+      <div class="modal-header" style="flex-shrink:0">
+        <div class="modal-title">💪 Today's Workout</div>
+        <button class="modal-close" onclick="closeSmartSuggest()">×</button>
+      </div>
+      <!-- Step 1: Muscle group picker -->
+      <div id="ss-step1" style="padding:16px;overflow-y:auto;flex:1">
+        <!-- Mode toggle -->
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-bottom:14px">
+          <button id="ss-mode-guided" onclick="setSSMode('guided')"
+            style="padding:10px;border-radius:10px;border:2px solid var(--red);background:var(--red);color:#fff;font-family:var(--font-cond);font-weight:700;font-size:14px;cursor:pointer">
+            🧠 Guided Split
+          </button>
+          <button id="ss-mode-free" onclick="setSSMode('free')"
+            style="padding:10px;border-radius:10px;border:2px solid var(--border);background:var(--surface2);color:var(--text2);font-family:var(--font-cond);font-weight:700;font-size:14px;cursor:pointer">
+            ✋ Free Choice
+          </button>
+        </div>
+        <!-- Guided mode content -->
+        <div id="ss-guided-content">
+          <div id="ss-guided-recommendation" style="background:rgba(226,75,74,.08);border:1px solid rgba(226,75,74,.2);border-radius:10px;padding:12px;margin-bottom:12px"></div>
+          <div style="font-size:12px;color:var(--text3);margin-bottom:10px">Or pick a different split:</div>
+          <div style="display:flex;flex-wrap:wrap;gap:6px">
+            <button onclick="selectGuidedSplit('Push')" class="ss-split-btn" style="padding:7px 14px;border-radius:20px;border:1px solid var(--border);background:var(--surface2);color:var(--text2);font-size:13px;font-weight:600;cursor:pointer">🔴 Push</button>
+            <button onclick="selectGuidedSplit('Pull')" class="ss-split-btn" style="padding:7px 14px;border-radius:20px;border:1px solid var(--border);background:var(--surface2);color:var(--text2);font-size:13px;font-weight:600;cursor:pointer">🔵 Pull</button>
+            <button onclick="selectGuidedSplit('Legs')" class="ss-split-btn" style="padding:7px 14px;border-radius:20px;border:1px solid var(--border);background:var(--surface2);color:var(--text2);font-size:13px;font-weight:600;cursor:pointer">🟢 Legs</button>
+            <button onclick="selectGuidedSplit('Upper')" class="ss-split-btn" style="padding:7px 14px;border-radius:20px;border:1px solid var(--border);background:var(--surface2);color:var(--text2);font-size:13px;font-weight:600;cursor:pointer">⬆ Upper</button>
+            <button onclick="selectGuidedSplit('Lower')" class="ss-split-btn" style="padding:7px 14px;border-radius:20px;border:1px solid var(--border);background:var(--surface2);color:var(--text2);font-size:13px;font-weight:600;cursor:pointer">⬇ Lower</button>
+          </div>
+        </div>
+        <!-- Free choice content -->
+        <div id="ss-free-content" style="display:none">
+          <div style="font-size:13px;color:var(--text2);margin-bottom:12px">Pick the muscle groups you're training today:</div>
+          <div id="ss-muscle-chips" style="display:flex;flex-wrap:wrap;gap:8px;margin-bottom:16px"></div>
+        </div>
+        <button onclick="generateSuggestions()" id="ss-generate-btn" class="btn-primary" style="width:100%;font-size:15px;padding:13px;margin-top:12px;opacity:.4" disabled>
+          Show My Exercises →
+        </button>
+      </div>
+      <!-- Step 2: Suggested exercises -->
+      <div id="ss-step2" style="display:none;flex-direction:column;flex:1;min-height:0;overflow:hidden">
+        <div style="padding:12px 16px;border-bottom:1px solid var(--border);flex-shrink:0">
+          <div id="ss-subtitle" style="font-size:12px;color:var(--text3)"></div>
+        </div>
+        <div id="ss-exercise-list" style="overflow-y:auto;flex:1;padding:8px 16px"></div>
+        <div style="padding:12px 16px;border-top:1px solid var(--border);flex-shrink:0;display:flex;gap:8px">
+          <button onclick="showStep1()" style="flex:1;background:var(--surface2);border:1px solid var(--border);border-radius:10px;padding:11px;font-size:13px;font-weight:700;cursor:pointer;color:var(--text2)">← Change</button>
+          <button onclick="addAllSuggested()" id="ss-add-all-btn" class="btn-primary" style="flex:2;font-size:14px;padding:11px">Add Selected to Workout</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- DIET PLAN IMPORT MODAL -->
+  <div class="modal-overlay" id="diet-plan-modal" style="display:none" onclick="if(event.target===this)closeDietPlanModal()">
+    <div class="modal-sheet" style="max-height:92vh;display:flex;flex-direction:column;overflow:hidden">
+      <div class="modal-handle" style="flex-shrink:0"></div>
+      <div class="modal-header" style="flex-shrink:0">
+        <div class="modal-title">📋 Import Diet Plan</div>
+        <button class="modal-close" onclick="closeDietPlanModal()">×</button>
+      </div>
+      <div style="padding:16px;overflow-y:auto;flex:1">
+        <!-- Format guide -->
+        <div style="background:var(--surface2);border-radius:10px;padding:12px;margin-bottom:12px;font-size:12px;color:var(--text2);line-height:1.7">
+          <div style="font-weight:700;color:var(--text);margin-bottom:6px">Format (plain text):</div>
+          <code style="font-size:11px;color:var(--text2);white-space:pre-wrap">PLAN: My Diet Plan
+DAYS: 14
+
+DAY 1
+breakfast: 2 idli, sambar, coffee
+lunch: rice 200g, dal, papad
+dinner: 2 roti, sabzi, curd
+snack: banana, almonds 20g
+
+DAY 2
+breakfast: pesarattu, chutney
+lunch: rice, sambar, rasam
+dinner: 3 roti, dal tadka
+snack: apple, peanuts</code>
+          <div style="margin-top:8px;font-size:11px;color:var(--text3)">💡 If only DAY 1 is given, same meals repeat every day.</div>
+        </div>
+        <textarea id="diet-plan-input" placeholder="Paste your diet plan here…" style="width:100%;height:200px;padding:12px;border:1.5px solid var(--border);border-radius:10px;background:var(--surface2);color:var(--text);font-family:var(--font-body);font-size:13px;resize:none;box-sizing:border-box;margin-bottom:10px;line-height:1.6"></textarea>
+        <div id="diet-plan-parse-preview" style="margin-bottom:10px"></div>
+        <button class="btn-primary" onclick="parseDietPlan()" style="width:100%;font-size:15px;padding:13px">
+          Import Plan →
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- DIET PLAN MANAGER MODAL -->
+  <div class="modal-overlay" id="diet-plan-manager-modal" style="display:none" onclick="if(event.target===this)closeDietPlanManager()">
+    <div class="modal-sheet" style="max-height:85vh;display:flex;flex-direction:column;overflow:hidden">
+      <div class="modal-handle" style="flex-shrink:0"></div>
+      <div class="modal-header" style="flex-shrink:0">
+        <div class="modal-title">⚙ Diet Plan</div>
+        <button class="modal-close" onclick="closeDietPlanManager()">×</button>
+      </div>
+      <div id="diet-plan-manager-content" style="padding:16px;overflow-y:auto;flex:1"></div>
+    </div>
+  </div>
+
+  <!-- FOOD QUANTITY MODAL -->
+  <div class="modal-overlay" id="food-qty-modal" style="display:none" onclick="if(event.target===this)document.getElementById('food-qty-modal').style.display='none'">
+    <div class="modal-sheet" style="max-height:88vh;display:flex;flex-direction:column">
+      <div class="modal-handle"></div>
+      <div class="modal-header" style="flex-shrink:0">
+        <div class="modal-title" id="fqty-name" style="font-size:17px;white-space:normal;line-height:1.2"></div>
+        <button class="modal-close" onclick="document.getElementById('food-qty-modal').style.display='none'">×</button>
+      </div>
+      <!-- Scrollable content -->
+      <div style="overflow-y:auto;flex:1;padding:14px 16px">
+        <div id="fqty-nutrition" style="display:grid;grid-template-columns:repeat(3,1fr);gap:6px;margin-bottom:12px"></div>
+        <div style="margin-bottom:10px">
+          <div style="font-size:12px;font-weight:700;color:var(--text2);margin-bottom:6px;text-transform:uppercase;letter-spacing:.5px">Quantity</div>
+          <div style="display:flex;gap:8px;align-items:center">
+            <input class="inp" id="fqty-amount" type="number" value="100" inputmode="decimal" style="width:80px" oninput="updateQtyPreview()">
+            <select class="inp" id="fqty-unit" onchange="updateQtyPreview()" style="flex:1">
+              <option value="g">grams (g)</option>
+              <option value="ml">ml</option>
+              <option value="serving">serving (≈1 plate)</option>
+              <option value="piece">piece</option>
+              <option value="cup">cup (≈240g)</option>
+              <option value="tbsp">tbsp (≈15g)</option>
+              <option value="tsp">tsp (≈5g)</option>
+            </select>
+          </div>
+        </div>
+        <div id="fqty-preview" style="background:var(--surface2);border-radius:10px;padding:10px;margin-bottom:4px"></div>
+      </div>
+      <!-- Add button ALWAYS visible at bottom, outside scroll -->
+      <div style="padding:12px 16px;flex-shrink:0;border-top:1px solid var(--border);background:var(--bg)">
+        <button class="btn-primary" onclick="confirmAddFood()" style="margin:0">Add to Log ✓</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- RECIPE BUILDER MODAL -->
+  <div class="modal-overlay" id="recipe-modal" style="display:none" onclick="if(event.target===this)closeRecipeBuilder()">
+    <div class="modal-sheet" style="max-height:95vh;display:flex;flex-direction:column;overflow:hidden">
+      <div class="modal-handle" style="flex-shrink:0"></div>
+      <div class="modal-header" style="flex-shrink:0">
+        <div class="modal-title">🧪 Recipe / Ingredient Builder</div>
+        <button class="modal-close" onclick="closeRecipeBuilder()">×</button>
+      </div>
+      <!-- Recipe name + meal -->
+      <div style="padding:8px 16px;border-bottom:1px solid var(--border);flex-shrink:0;display:flex;gap:8px;align-items:center">
+        <input class="inp" id="recipe-name" placeholder="Recipe name (e.g. Dal Rice, Salad)" style="flex:2;font-size:13px">
+        <select class="inp" id="recipe-meal" style="flex:1;font-size:12px">
+          <option value="breakfast">Breakfast</option>
+          <option value="lunch" selected>Lunch</option>
+          <option value="dinner">Dinner</option>
+          <option value="snack">Snack</option>
+        </select>
+      </div>
+      <!-- Ingredient search -->
+      <div style="padding:8px 16px;border-bottom:1px solid var(--border);flex-shrink:0">
+        <input class="inp" id="recipe-search" placeholder="Search ingredient to add…" oninput="filterRecipeSearch()" autocomplete="off" style="width:100%;font-size:14px">
+      </div>
+      <!-- Ingredient search results -->
+      <div id="recipe-search-results" style="max-height:180px;overflow-y:auto;border-bottom:2px solid var(--border);flex-shrink:0"></div>
+      <!-- Added ingredients list -->
+      <div style="flex:1;overflow-y:auto;padding:0 16px 8px">
+        <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.8px;color:var(--text3);padding:8px 0 4px">Added Ingredients</div>
+        <div id="recipe-ingredients-list"></div>
+        <!-- Totals -->
+        <div id="recipe-totals" style="margin-top:8px;padding:10px;background:var(--surface2);border-radius:10px;display:none"></div>
+      </div>
+      <!-- Footer -->
+      <div style="padding:12px 16px;border-top:1px solid var(--border);background:var(--bg);flex-shrink:0;display:flex;gap:8px">
+        <button class="btn-primary" style="flex:1" onclick="logRecipe()">Add to Log ✓</button>
+        <button class="btn-outline" onclick="clearRecipe()">Clear</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- DATA PAGE -->
+  <div class="page" id="page-data">
+    <div class="card">
+      <div class="section-title">Data Management</div>
+      <div class="data-action"><div><div class="data-lbl">Export Backup</div><div class="data-sub">Download all data as a JSON file</div></div><button class="btn-sm" onclick="exportData()">Export</button></div>
+      <div class="data-action"><div><div class="data-lbl">Import Backup</div><div class="data-sub">Restore from a previously exported file</div></div>
+        <button class="btn-sm" onclick="document.getElementById('import-file').click()">Import</button>
+        <input type="file" id="import-file" accept=".json" style="display:none" onchange="importData(event)">
+      </div>
+      <div class="data-action"><div><div class="data-lbl">Storage Used</div><div class="data-sub" id="storage-used">Calculating...</div></div></div>
+      <div class="data-action"><div><div class="data-lbl">Last Saved</div><div class="data-sub" id="last-saved">—</div></div></div>
+    </div>
+    <div class="card">
+      <div class="section-title">Workout History</div>
+      <div id="workout-history-list"></div>
+    </div>
+    <div class="card" style="border-color:var(--red-bg)">
+      <div class="section-title" style="color:var(--red-dark)">Danger Zone</div>
+      <div class="data-action" style="border:none"><div><div class="data-lbl">Clear All Data</div><div class="data-sub">Cannot be undone</div></div><button class="btn-sm btn-danger" onclick="clearAllData()">Clear</button></div>
+    </div>
+  </div>
+</div>
+<div class="toast" id="toast"></div>
+
+<!-- MUSCLE GROUP PROMPT MODAL -->
+<div class="modal-overlay" id="muscle-prompt-modal" style="display:none">
+  <div class="modal-sheet" style="max-height:70vh">
+    <div class="modal-handle"></div>
+    <div class="modal-header">
+      <div class="modal-title">Unknown Exercise</div>
+    </div>
+    <div style="padding:16px">
+      <div style="font-size:13px;color:var(--text2);margin-bottom:4px">Can't identify muscle group for:</div>
+      <div id="mp-ex-name" style="font-family:var(--font-cond);font-weight:900;font-size:22px;text-transform:uppercase;color:var(--text);margin-bottom:14px"></div>
+
+      <!-- Fuzzy suggestion -->
+      <div id="mp-suggestion" style="display:none;background:var(--surface2);border-radius:10px;padding:10px 12px;margin-bottom:14px">
+        <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.8px;color:var(--text3);margin-bottom:6px">Did you mean?</div>
+        <div style="display:flex;align-items:center;justify-content:space-between">
+          <div>
+            <div style="font-family:var(--font-cond);font-weight:700;font-size:17px;color:var(--text)" id="mp-suggest-name"></div>
+            <div style="font-size:12px;color:var(--text3)" id="mp-suggest-detail"></div>
+          </div>
+          <button class="btn-primary" style="width:auto;padding:8px 16px;margin:0;font-size:14px" onclick="useSuggestion()">Use This</button>
+        </div>
+      </div>
+
+      <div style="font-size:12px;font-weight:700;color:var(--text2);margin-bottom:6px;text-transform:uppercase;letter-spacing:.6px">Select Muscle Group</div>
+      <select class="inp" id="mp-muscle-select" style="margin-bottom:14px">
+        <option value="Back">Back</option>
+        <option value="Chest">Chest</option>
+        <option value="Shoulders">Shoulders</option>
+        <option value="Biceps">Biceps</option>
+        <option value="Triceps">Triceps</option>
+        <option value="Legs">Legs</option>
+        <option value="Glutes">Glutes</option>
+        <option value="Hamstrings">Hamstrings</option>
+        <option value="Calves">Calves</option>
+        <option value="Abs">Abs</option>
+        <option value="Cardio">Cardio</option>
+        <option value="Forearms">Forearms</option>
+        <option value="Other">Other</option>
+      </select>
+      <div style="font-size:11px;color:var(--text3);margin-bottom:12px">LiftLog will remember this for next time ✓</div>
+      <button class="btn-primary" onclick="acceptMusclePrompt()">Save & Continue</button>
+    </div>
+  </div>
+</div>
+
+<!-- EXERCISE LIBRARY MODAL -->
+<div class="modal-overlay" id="lib-modal" style="display:none" onclick="closeLibraryOnBg(event)">
+  <div class="modal-sheet">
+    <div class="modal-handle"></div>
+    <div class="modal-header">
+      <div class="modal-title">Exercise Library</div>
+      <button class="modal-close" onclick="closeLibrary()">×</button>
+    </div>
+    <div class="lib-search">
+      <input type="text" id="lib-search-inp" placeholder="Search exercises..." oninput="filterLibrary()" autocomplete="off">
+    </div>
+    <div class="lib-muscles" id="lib-muscle-chips"></div>
+    <div class="lib-list" id="lib-list"></div>
+    <!-- Custom exercise entry always visible at bottom -->
+    <div class="lib-custom-footer">
+      <div class="lib-custom-label">Can't find it? Add your own:</div>
+      <div class="lib-custom-row">
+        <input class="lib-custom-inp" id="custom-ex-name" type="text" placeholder="Exercise name…" autocomplete="off" style="flex:3">
+        <select class="lib-custom-sel" id="custom-ex-muscle" style="flex:2">
+          <option value="Chest">Chest</option>
+          <option value="Back">Back</option>
+          <option value="Shoulders">Shoulders</option>
+          <option value="Biceps">Biceps</option>
+          <option value="Triceps">Triceps</option>
+          <option value="Legs" selected>Legs</option>
+          <option value="Glutes">Glutes</option>
+          <option value="Hamstrings">Hamstrings</option>
+          <option value="Calves">Calves</option>
+          <option value="Abs">Abs</option>
+          <option value="Cardio">Cardio</option>
+          <option value="Forearms">Forearms</option>
+          <option value="Other">Other</option>
+        </select>
+      </div>
+      <div style="display:flex;gap:6px;align-items:center;margin-top:6px">
+        <div style="flex:1">
+          <div style="font-size:10px;font-weight:700;text-transform:uppercase;color:var(--text3);margin-bottom:3px">Kcal / rep <span style="font-weight:400;text-transform:none">(optional)</span></div>
+          <input class="lib-custom-inp" id="custom-ex-kcal" type="number" inputmode="decimal" placeholder="e.g. 0.5" step="0.1" style="width:100%;font-size:13px">
+        </div>
+        <button class="lib-custom-btn" onclick="addCustomExercise()" style="margin-top:18px">Add +</button>
+      </div>
+      <div style="font-size:10px;color:var(--text3);margin-top:4px">Leave kcal blank to auto-calculate from MET × body weight</div>
+    </div>
+  </div>
+</div>
+
+</body>
+</html>

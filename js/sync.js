@@ -388,8 +388,30 @@ async function syncFromSupabase(){
   try{
     const uid = _sbUser.id;
 
+    // ── Fire all 8 queries in PARALLEL instead of one-by-one ───────────────────
+    // This is the single biggest speed fix — was taking 800ms-2.4s sequentially,
+    // now all queries run at once and we wait for the slowest one only.
+    const [
+      { data: prof },
+      { data: wkts },
+      { data: sess },
+      { data: wl },
+      { data: fl },
+      { data: sl },
+      { data: em },
+      { data: cfd }
+    ] = await Promise.all([
+      _sb.from('profiles').select('*').eq('id',uid).single(),
+      _sb.from('workouts').select('*').eq('user_id',uid).order('date',{ascending:true}),
+      _sb.from('active_session').select('*').eq('user_id',uid).single(),
+      _sb.from('weight_log').select('*').eq('user_id',uid).order('date'),
+      _sb.from('food_log').select('*').eq('user_id',uid),
+      _sb.from('step_log').select('*').eq('user_id',uid),
+      _sb.from('exercise_memory').select('*').eq('user_id',uid).single(),
+      _sb.from('custom_foods').select('*').eq('user_id',uid),
+    ]);
+
     // ── Profile ───────────────────────────────────────────────────────────────
-    const {data:prof} = await _sb.from('profiles').select('*').eq('id',uid).single();
     if(prof){
       if(prof.cal_profile) state.calProfile = prof.cal_profile;
       if(prof.step_goal)   state.stepGoal   = prof.step_goal;
@@ -397,7 +419,6 @@ async function syncFromSupabase(){
     }
 
     // ── Workouts — MERGE by ID, never overwrite ───────────────────────────────
-    const {data:wkts} = await _sb.from('workouts').select('*').eq('user_id',uid).order('date',{ascending:true});
     if(wkts && wkts.length){
       // Build map of cloud workouts by ID
       const cloudById = {};
@@ -429,7 +450,6 @@ async function syncFromSupabase(){
     }
 
     // ── Active session — only pull if local session is empty ──────────────────
-    const {data:sess} = await _sb.from('active_session').select('*').eq('user_id',uid).single();
     if(sess && sess.exercises && sess.exercises.length){
       const savedDate = (sess.exercise_date||'').slice(0,10);
       const today = todayStr();
@@ -445,7 +465,6 @@ async function syncFromSupabase(){
     }
 
     // ── Weight log — merge by date, local wins ────────────────────────────────
-    const {data:wl} = await _sb.from('weight_log').select('*').eq('user_id',uid).order('date');
     if(wl && wl.length){
       const localByDate = {};
       localSnapshot.localWeightLog.forEach(e=>{ localByDate[e.date]=e; });
@@ -462,7 +481,6 @@ async function syncFromSupabase(){
     }
 
     // ── Food log — merge by date, local wins for today ────────────────────────
-    const {data:fl} = await _sb.from('food_log').select('*').eq('user_id',uid);
     if(fl){
       const today = todayStr();
       const merged = {};
@@ -479,7 +497,6 @@ async function syncFromSupabase(){
     }
 
     // ── Step log — merge by date, local wins ──────────────────────────────────
-    const {data:sl} = await _sb.from('step_log').select('*').eq('user_id',uid);
     if(sl){
       const merged = {...localSnapshot.localStepLog}; // start with local
       sl.forEach(r=>{
@@ -490,7 +507,6 @@ async function syncFromSupabase(){
     }
 
     // ── Exercise memory — merge keys, keep higher count ───────────────────────
-    const {data:em} = await _sb.from('exercise_memory').select('*').eq('user_id',uid).single();
     if(em && em.memory){
       const local = state.exerciseMemory||{};
       const cloud = em.memory;
@@ -503,7 +519,6 @@ async function syncFromSupabase(){
     }
 
     // ── Custom foods — union, no duplicates ───────────────────────────────────
-    const {data:cfd} = await _sb.from('custom_foods').select('*').eq('user_id',uid);
     if(cfd && cfd.length){
       const existing = new Set((state.customFoods||[]).map(f=>f.name));
       cfd.forEach(r=>{

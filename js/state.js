@@ -182,6 +182,7 @@ function renderDayBar(){
 // CALENDAR
 function renderCalendar(){
   const todayS=todayStr(),wdates=new Set(state.workoutHistory.map(w=>(w.date||'').slice(0,10)));
+  console.log('[LiftLog] renderCalendar: wdates=', [...wdates].slice(-5), 'total=', wdates.size);
   document.getElementById('cal-month-label').textContent=new Date(calYear,calMonth,1).toLocaleString('default',{month:'long',year:'numeric'});
   const grid=document.getElementById('cal-grid'); grid.innerHTML='';
   ['M','T','W','T','F','S','S'].forEach(d=>{const e=document.createElement('div');e.className='cal-dow';e.textContent=d;grid.appendChild(e);});

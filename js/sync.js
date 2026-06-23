@@ -447,6 +447,11 @@ async function syncFromSupabase(){
 
       state.workoutHistory = Object.values(merged)
         .sort((a,b)=>a.date.localeCompare(b.date));
+
+      // Diagnostic: log first 3 dates to console so we can see format
+      console.log('[LiftLog] After sync, workoutHistory dates (first 3):',
+        state.workoutHistory.slice(-3).map(w=>w.date));
+      console.log('[LiftLog] Total workouts:', state.workoutHistory.length);
     }
 
     // ── Active session — only pull if local session is empty ──────────────────
